@@ -1,0 +1,12 @@
+.env
+target/
+*.jar
+*.class
+.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+
+# Логи
+*.log
