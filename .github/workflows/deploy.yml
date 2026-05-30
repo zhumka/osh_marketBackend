@@ -1,0 +1,39 @@
+name: Deploy
+
+# Автодеплой на сервер при пуше/мерже в main (и вручную через "Run workflow").
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Не запускать два деплоя одновременно.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to server (SSH)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          # Если SSH-порт нестандартный — задайте секрет SSH_PORT и раскомментируйте:
+          # port: ${{ secrets.SSH_PORT }}
+          script_stop: true
+          script: |
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            echo ">>> Подтягиваю свежий код из origin/main"
+            git fetch --all --prune
+            git reset --hard origin/main
+            echo ">>> Пересобираю и перезапускаю контейнеры"
+            docker compose up -d --build
+            echo ">>> Чищу старые образы"
+            docker image prune -f
+            echo ">>> Статус"
+            docker compose ps

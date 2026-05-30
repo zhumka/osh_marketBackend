@@ -1,0 +1,281 @@
+================================================================================
+ OSH MARKET — ОПИСАНИЕ API
+ Система управления Ошским рынком (Spring Boot REST API)
+================================================================================
+
+ОБЩЕЕ
+--------------------------------------------------------------------------------
+Базовый URL (локально):  http://127.0.0.1:8080
+Аутентификация:          JWT. После входа добавляйте заголовок:
+                         Authorization: Bearer <token>
+Роли:                    ADMIN — пути /api/admin/**
+                         TENANT — пути /api/tenant/**
+                         /api/auth/** — публичные (без токена)
+Формат ошибок:           { "timestamp", "status", "error" }  (для валидации — "fields")
+
+ТЕСТОВЫЕ АККАУНТЫ (из сидов):
+  Админ:      ИНН 0000000000        пароль Admin@123456
+  Арендатор:  ИНН 11111111111111    пароль Tenant@123456   (есть долг и история)
+  Арендатор:  ИНН 22222222222222    пароль Tenant@123456   (всё оплачено)
+  Арендатор:  ИНН 33333333333333    пароль Tenant@123456   (крупный должник)
+
+
+================================================================================
+ 1. AUTH  (/api/auth)  — публичные, без токена
+================================================================================
+
+[POST] /api/auth/login
+  Назначение: Вход в систему по ИНН и паролю. Возвращает JWT (срок 8 часов).
+  Тело (JSON):
+    inn       string   обязательно   ИНН пользователя
+    password  string   обязательно   пароль
+  Ответ: { token, role, inn }
+
+[POST] /api/auth/forgot-password
+  Назначение: Инициировать сброс пароля. Возвращает временный resetToken и
+              замаскированные контакты, чтобы пользователь выбрал способ.
+  Тело (JSON):
+    inn       string   обязательно   ИНН пользователя
+  Ответ: { resetToken, maskedEmail, maskedPhone, hasEmail, hasPhone }
+
+[POST] /api/auth/forgot-password/send-code
+  Назначение: Сгенерировать и отправить 6-значный код подтверждения.
+              ВНИМАНИЕ: SMS убран — код всегда уходит на EMAIL (даже при method=phone).
+              У пользователя должен быть привязан email.
+  Тело (JSON):
+    resetToken  string   обязательно   токен из шага forgot-password
+    method      string   обязательно   "email" или "phone"
+  Ответ: { message }
+
+[POST] /api/auth/forgot-password/verify-code
+  Назначение: Проверить введённый код подтверждения.
+  Тело (JSON):
+    resetToken  string   обязательно
+    code        string   обязательно   6-значный код из письма
+  Ответ: { message }
+
+[POST] /api/auth/reset-password
+  Назначение: Установить новый пароль по подтверждённому токену.
+  Тело (JSON):
+    resetToken       string   обязательно
+    newPassword      string   обязательно   минимум 6 символов
+    confirmPassword  string   обязательно   должен совпадать с newPassword
+  Ответ: { message }
+
+
+================================================================================
+ 2. TENANT  (/api/tenant)  — роль TENANT, требуется JWT
+================================================================================
+
+[GET] /api/tenant/profile
+  Назначение: Профиль арендатора (берётся по токену).
+  Параметры: нет.
+  Ответ: ФИО, ИНН, номер места, проход, отдел, аренда, долг, активность,
+         дата последней оплаты, дата начала аренды.
+
+[GET] /api/tenant/payments/next
+  Назначение: Информация о следующем платеже.
+  Параметры: нет.
+  Ответ: { dueDate, monthlyRent, debt, totalDue }
+
+[GET] /api/tenant/payments/history
+  Назначение: История платежей арендатора со статусами.
+  Параметры: нет.
+  Ответ: список { id, amount, paymentDate, monthName, description,
+                  status (PENDING/APPROVED/REJECTED), paymentMethodName, rejectReason }
+
+[GET] /api/tenant/notifications
+  Назначение: Список уведомлений + счётчик непрочитанных.
+  Параметры: нет.
+  Ответ: { notifications: [...], unreadCount }
+
+[PATCH] /api/tenant/notifications/read-all
+  Назначение: Отметить все уведомления прочитанными.
+  Параметры: нет.
+  Ответ: { message }
+
+[GET] /api/tenant/bank-links
+  Назначение: Список банков со ссылками (справочно).
+  Параметры: нет.
+  Ответ: список { id, bankName, bankCode, url }
+
+[GET] /api/tenant/payment-methods
+  Назначение: Доступные способы оплаты (для экрана выбора оплаты по QR).
+  Параметры: нет.
+  Ответ: список { id, name, requisites, hasQr, qrUrl }
+
+[GET] /api/tenant/payment-methods/{id}/qr
+  Назначение: Изображение QR-кода выбранного способа оплаты (image/png и т.п.).
+  Path-параметр:
+    id   Long   обязательно   ID способа оплаты
+  Ответ: бинарное изображение.
+
+[POST] /api/tenant/payments        (multipart/form-data)
+  Назначение: Отправить платёж на модерацию. Создаёт платёж со статусом PENDING,
+              долг НЕ списывается (спишется после подтверждения админом).
+  Поля формы (form-data):
+    methodId  Long          обязательно   ID способа оплаты
+    amount    BigDecimal    обязательно   сумма платежа (> 0)
+    receipt   file          обязательно   файл чека об оплате (до 10 МБ)
+  Ответ: { paymentId, status: "PENDING", message }
+
+
+================================================================================
+ 3. ADMIN  (/api/admin)  — роль ADMIN, требуется JWT
+================================================================================
+
+--- Дашборд и аналитика ---
+
+[GET] /api/admin/dashboard
+  Назначение: Сводка для главной админки.
+  Параметры: нет.
+  Ответ: { totalTenants, occupiedPlaces, freePlaces, debtors, totalDebt, recentTenants[] }
+
+[GET] /api/admin/analytics
+  Назначение: Расширенная аналитика.
+  Параметры: нет.
+  Ответ: счётчики + totalMonthlyRevenue + topDebtors[]
+
+[GET] /api/admin/debtors
+  Назначение: Список должников (активные договоры с долгом > 0).
+  Параметры: нет.
+  Ответ: список { tenantId, inn, fullName, placeNumber, phone, location, monthlyRent, debt }
+
+--- Арендаторы ---
+
+[GET] /api/admin/tenants
+  Назначение: Список всех арендаторов (не удалённых).
+  Параметры: нет.
+
+[POST] /api/admin/tenants
+  Назначение: Создать арендатора вместе с торговым местом и договором.
+              Генерирует временный пароль и отправляет доступы на email.
+  Тело (JSON):
+    fullName            string   обязательно   ФИО
+    inn                 string   обязательно   ИНН
+    phone               string   опционально
+    email               string   опционально   (нужен, чтобы пришли доступы)
+    passportSeries      string   опционально
+    passportNumber      string   опционально
+    passportIssuedDate  date     опционально   формат YYYY-MM-DD
+    passportIssuedBy    string   опционально
+    placeNumber         string   обязательно   формат "Буква-цифры" (напр. A-12, М-05)
+    monthlyRent         number   обязательно   стоимость аренды (> 0)
+    aisle               string   опционально   проход
+    department          string   опционально   отдел
+    startDate           date     обязательно   дата начала аренды (YYYY-MM-DD)
+
+[GET] /api/admin/tenants/{id}
+  Назначение: Карточка арендатора с историей платежей.
+  Path: id (Long) — ID арендатора.
+
+[PUT] /api/admin/tenants/{id}
+  Назначение: Обновить данные арендатора. Все поля опциональны — меняются только переданные.
+  Path: id (Long).
+  Тело (JSON):
+    fullName, phone, email, passportSeries, passportNumber,
+    passportIssuedDate (date), passportIssuedBy, monthlyRent (number)
+
+[DELETE] /api/admin/tenants/{id}
+  Назначение: Soft delete арендатора (помечается удалённым, место освобождается).
+              ИНН удалённого не блокирует регистрацию нового.
+  Path: id (Long).
+
+[POST] /api/admin/tenants/{id}/payment
+  Назначение: Ручной (наличный) платёж от админа. Сразу APPROVED и списывает долг.
+  Path: id (Long) — ID арендатора.
+  Тело (JSON):
+    amount       number   обязательно   сумма (>= 0.01)
+    paymentDate  date     опционально   по умолчанию сегодня (YYYY-MM-DD)
+    description  string   опционально   комментарий
+
+--- Модерация онлайн-платежей ---
+
+[GET] /api/admin/payments/pending
+  Назначение: Список онлайн-платежей, ожидающих проверки (статус PENDING).
+  Параметры: нет.
+  Ответ: список { id, tenantId, inn, fullName, placeNumber, amount,
+                  paymentMethodName, submittedAt, hasReceipt, receiptUrl }
+
+[GET] /api/admin/payments/{id}/receipt
+  Назначение: Получить файл чека, приложенного арендатором.
+  Path: id (Long) — ID платежа.
+  Ответ: бинарный файл (изображение/PDF).
+
+[POST] /api/admin/payments/{id}/approve
+  Назначение: Подтвердить платёж. Статус → APPROVED, долг списывается, арендатору уведомление.
+  Path: id (Long) — ID платежа.
+  Тело: нет.
+
+[POST] /api/admin/payments/{id}/reject
+  Назначение: Отклонить платёж. Статус → REJECTED, арендатору уведомление с причиной.
+  Path: id (Long) — ID платежа.
+  Тело (JSON):
+    reason   string   обязательно   причина отклонения (до 500 символов)
+
+--- Способы оплаты (QR) ---
+
+[GET] /api/admin/payment-methods
+  Назначение: Список всех способов оплаты (включая неактивные) для управления.
+  Параметры: нет.
+  Ответ: список { id, name, requisites, active, sortOrder, hasQr, qrUrl }
+
+[POST] /api/admin/payment-methods
+  Назначение: Создать способ оплаты.
+  Тело (JSON):
+    name        string   обязательно   название (до 100 символов)
+    requisites  string   опционально   реквизиты/инструкция (до 1000 символов)
+    active      boolean  опционально   по умолчанию true
+    sortOrder   int      опционально   порядок сортировки
+
+[PUT] /api/admin/payment-methods/{id}
+  Назначение: Обновить способ оплаты.
+  Path: id (Long).
+  Тело (JSON): name (обяз), requisites, active, sortOrder
+
+[POST] /api/admin/payment-methods/{id}/qr        (multipart/form-data)
+  Назначение: Загрузить/заменить QR-код способа оплаты (хранится в MinIO).
+  Path: id (Long) — ID способа оплаты.
+  Поля формы:
+    qr   file   обязательно   изображение QR-кода (PNG/JPG)
+
+--- Торговые места ---
+
+[GET] /api/admin/places/free
+  Назначение: Список свободных мест.
+  Параметры: нет.
+
+[GET] /api/admin/places/occupied
+  Назначение: Список занятых мест.
+  Параметры: нет.
+
+[POST] /api/admin/places/{id}/book
+  Назначение: Забронировать свободное место за новым арендатором (создаёт пользователя+договор).
+  Path: id (Long) — ID места.
+  Тело (JSON):
+    fullName            string   обязательно
+    inn                 string   обязательно
+    phone               string   опционально
+    email               string   опционально
+    passportSeries      string   опционально
+    passportNumber      string   опционально
+    passportIssuedDate  date     опционально (YYYY-MM-DD)
+    passportIssuedBy    string   опционально
+    startDate           date     обязательно (YYYY-MM-DD)
+
+[POST] /api/admin/places/{id}/release
+  Назначение: Освободить место (завершить активный договор).
+  Path: id (Long) — ID места.
+  Тело: нет.
+
+--- Отчёты ---
+
+[GET] /api/admin/reports/export
+  Назначение: Экспорт отчёта по аренде и платежам (учитываются только APPROVED-платежи).
+  Query-параметр:
+    type   string   опционально   "excel" (по умолчанию) | "pdf" | "txt"
+  Ответ: файл (xlsx / pdf / txt) как вложение.
+
+================================================================================
+ КОНЕЦ
+================================================================================

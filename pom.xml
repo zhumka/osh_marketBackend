@@ -115,6 +115,13 @@
             <version>2.6.0</version>
         </dependency>
 
+        <!-- Автозагрузка .env в Spring Environment (локальный запуск) -->
+        <dependency>
+            <groupId>me.paulschwarz</groupId>
+            <artifactId>spring-dotenv</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
