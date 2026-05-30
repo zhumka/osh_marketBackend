@@ -38,7 +38,6 @@ public class AdminService {
     private final NotificationService notificationService;
     private final DebtCalculationService debtCalculationService;
     private final EmailService emailService;
-    private final SmsService smsService;
     private final StorageService storageService;
     private final PasswordEncoder passwordEncoder;
 
@@ -159,7 +158,7 @@ public class AdminService {
         contract.setStartDate(req.getStartDate());
         contractRepository.save(contract);
 
-        sendCredentials(req.getEmail(), req.getPhone(), req.getInn(), tempPassword);
+        sendCredentials(req.getEmail(), req.getInn(), tempPassword);
         notificationService.createSystemNotification(tenant,
                 "Добро пожаловать! Ваше место " + req.getPlaceNumber() + " забронировано.");
 
@@ -429,7 +428,7 @@ public class AdminService {
         contract.setStartDate(req.getStartDate());
         contractRepository.save(contract);
 
-        sendCredentials(req.getEmail(), req.getPhone(), req.getInn(), tempPassword);
+        sendCredentials(req.getEmail(), req.getInn(), tempPassword);
         notificationService.createSystemNotification(tenant,
                 "Добро пожаловать! Ваше место " + place.getPlaceNumber() + " забронировано.");
     }
@@ -536,9 +535,12 @@ public class AdminService {
         return sb.toString();
     }
 
-    private void sendCredentials(String email, String phone, String inn, String tempPassword) {
-        if (email != null) emailService.sendTenantCredentials(email, inn, tempPassword);
-        if (phone != null) smsService.sendTenantCredentials(phone, inn, tempPassword);
+    private void sendCredentials(String email, String inn, String tempPassword) {
+        if (email != null) {
+            emailService.sendTenantCredentials(email, inn, tempPassword);
+        } else {
+            log.warn("Не удалось отправить доступы: у арендатора нет email (INN={})", inn);
+        }
     }
 
     private String getMonthName(Month month) {

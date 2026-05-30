@@ -26,6 +26,12 @@ public class EmailService {
                 "\n\nСсылка действительна 15 минут. Если вы не запрашивали сброс — проигнорируйте это письмо.");
     }
 
+    public void sendPasswordResetCode(String toEmail, String code) {
+        send(toEmail, "Код восстановления пароля — Ошский рынок",
+                "Ваш код для сброса пароля: " + code +
+                "\n\nКод действителен 15 минут. Если вы не запрашивали сброс — проигнорируйте это письмо.");
+    }
+
     public void sendTenantCredentials(String toEmail, String inn, String tempPassword) {
         send(toEmail, "Ваши данные для входа — Ошский рынок",
                 "Добро пожаловать!\n\nВаши данные для входа:\nИНН: " + inn +

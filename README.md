@@ -99,7 +99,6 @@ java -jar target/osh-market-0.0.1-SNAPSHOT.jar
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | Креды MinIO | `minioadmin` / `minioadmin` |
 | `MINIO_BUCKET` | Имя бакета | `osh-market` |
 | `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_FROM` | SMTP | Gmail SMTP, креды пустые |
-| `SMS_ENABLED` | Включение SMS (заглушка) | `false` |
 
 Прочие настройки (`application.yml`):
 - JWT TTL — 8 часов (`jwt.expiration-ms`)

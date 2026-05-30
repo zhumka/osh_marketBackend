@@ -35,7 +35,6 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final LoginRateLimitService rateLimitService;
     private final EmailService emailService;
-    private final SmsService smsService;
 
     @Value("${app.password-reset.code-expiration-minutes}")
     private int codeExpirationMinutes;
@@ -94,13 +93,11 @@ public class AuthService {
         prt.setMethod(request.getMethod());
         tokenRepository.save(prt);
 
-        if ("email".equals(request.getMethod())) {
-            if (user.getEmail() == null) throw ApiException.badRequest("Email не привязан к аккаунту");
-            emailService.sendPasswordResetLink(user.getEmail(), "Код подтверждения: " + code);
-        } else {
-            if (user.getPhone() == null) throw ApiException.badRequest("Телефон не привязан к аккаунту");
-            smsService.sendPasswordResetCode(user.getPhone(), code);
+        // SMS не используется — код всегда отправляется на email.
+        if (user.getEmail() == null) {
+            throw ApiException.badRequest("Email не привязан к аккаунту — отправка кода невозможна");
         }
+        emailService.sendPasswordResetCode(user.getEmail(), code);
     }
 
     @Transactional

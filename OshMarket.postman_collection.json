@@ -1,15 +1,13 @@
 {
   "info": {
-    "_postman_id": "b7e1c0a2-9f3d-4c8e-8a1b-osh-market-0001",
+    "_postman_id": "b7e1c0a2-9f3d-4c8e-8a1b-osh-market-0002",
     "name": "Osh Market API",
-    "description": "Коллекция API системы управления Ошским рынком.\n\nИспользуйте окружение (Environment) с переменными:\n- base_url — базовый URL без хвостового слэша (напр. http://localhost:8080)\n- token — JWT (заполняется автоматически после Login)\n- token_exp — срок действия токена (epoch seconds, заполняется автоматически)\n- refresh_token — refresh-токен (бэк пока не выдаёт; заполнится, если появится в ответе)\n\nАвторизация задана на уровне коллекции (Bearer {{token}}) и наследуется всеми запросами, кроме папки Auth.\n\nКак начать: выберите Environment → выполните Auth > Login → токен сам сохранится и будет подставляться в заголовок Authorization.",
+    "description": "Коллекция API системы управления Ошским рынком.\n\nEnvironment-переменные:\n- base_url — базовый URL без хвостового слэша (напр. http://127.0.0.1:8080)\n- token — JWT (заполняется автоматически после Login)\n- token_exp — срок действия токена (epoch seconds, авто)\n- refresh_token — refresh-токен (бэк пока не выдаёт)\n\nАвторизация задана на уровне коллекции (Bearer {{token}}) и наследуется всеми запросами, кроме папки Auth.\n\nКак начать: выбери Environment -> выполни Auth > Login -> токен сам сохранится.\n\nТестовые аккаунты: админ 0000000000/Admin@123456; арендатор 11111111111111/Tenant@123456.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
     "type": "bearer",
-    "bearer": [
-      { "key": "token", "value": "{{token}}", "type": "string" }
-    ]
+    "bearer": [ { "key": "token", "value": "{{token}}", "type": "string" } ]
   },
   "event": [
     {
@@ -17,10 +15,9 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// Предупреждение, если access-токен истёк",
           "var exp = pm.environment.get('token_exp');",
           "if (exp && (Date.now() / 1000) > Number(exp)) {",
-          "    console.warn('Access token истёк или скоро истечёт — выполните Auth > Login заново.');",
+          "    console.warn('Access token истёк — выполни Auth > Login заново.');",
           "}"
         ]
       }
@@ -38,30 +35,19 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// Сохраняем токен(ы) в окружение после успешного логина",
                   "var res;",
                   "try { res = pm.response.json(); } catch (e) { res = {}; }",
-                  "",
                   "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
-                  "",
                   "if (res && res.token) {",
                   "    pm.environment.set('token', res.token);",
-                  "",
-                  "    // Декодируем exp из payload JWT (base64url)",
                   "    try {",
                   "        var part = res.token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');",
                   "        var payload = JSON.parse(Buffer.from(part, 'base64').toString('utf8'));",
                   "        if (payload.exp) { pm.environment.set('token_exp', payload.exp); }",
-                  "    } catch (e) { console.log('Не удалось декодировать JWT:', e); }",
-                  "",
-                  "    // refresh_token — на случай, если бэк начнёт его возвращать",
+                  "    } catch (e) { console.log('JWT decode failed:', e); }",
                   "    if (res.refreshToken) { pm.environment.set('refresh_token', res.refreshToken); }",
-                  "    else if (res.refresh_token) { pm.environment.set('refresh_token', res.refresh_token); }",
-                  "",
                   "    console.log('Токен сохранён в окружение.');",
-                  "} else {",
-                  "    console.warn('В ответе нет поля token.');",
-                  "}"
+                  "} else { console.warn('В ответе нет поля token.'); }"
                 ]
               }
             }
@@ -70,17 +56,9 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"inn\": \"0000000000\",\n  \"password\": \"Admin@123456\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/auth/login",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "auth", "login" ]
-            },
-            "description": "Вход по ИНН + пароль. Тестовый скрипт автоматически кладёт token и token_exp в окружение."
+            "body": { "mode": "raw", "raw": "{\n  \"inn\": \"0000000000\",\n  \"password\": \"Admin@123456\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/auth/login", "host": [ "{{base_url}}" ], "path": [ "api", "auth", "login" ] },
+            "description": "Вход по ИНН + пароль. Тест-скрипт кладёт token и token_exp в окружение."
           }
         },
         {
@@ -89,17 +67,9 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"inn\": \"0000000000\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/auth/forgot-password",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "auth", "forgot-password" ]
-            },
-            "description": "Инициировать сброс пароля. Возвращает маскированные контакты и resetToken."
+            "body": { "mode": "raw", "raw": "{\n  \"inn\": \"0000000000\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/auth/forgot-password", "host": [ "{{base_url}}" ], "path": [ "api", "auth", "forgot-password" ] },
+            "description": "Инициировать сброс пароля. Возвращает resetToken и маскированные контакты."
           }
         },
         {
@@ -108,17 +78,9 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"resetToken\": \"<resetToken из предыдущего шага>\",\n  \"method\": \"email\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/auth/forgot-password/send-code",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "auth", "forgot-password", "send-code" ]
-            },
-            "description": "Отправить код подтверждения. method: 'email' или 'phone'."
+            "body": { "mode": "raw", "raw": "{\n  \"resetToken\": \"<resetToken>\",\n  \"method\": \"email\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/auth/forgot-password/send-code", "host": [ "{{base_url}}" ], "path": [ "api", "auth", "forgot-password", "send-code" ] },
+            "description": "Отправить 6-значный код. SMS убран — код всегда уходит на email (нужен привязанный email)."
           }
         },
         {
@@ -127,16 +89,8 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"resetToken\": \"<resetToken>\",\n  \"code\": \"123456\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/auth/forgot-password/verify-code",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "auth", "forgot-password", "verify-code" ]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"resetToken\": \"<resetToken>\",\n  \"code\": \"123456\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/auth/forgot-password/verify-code", "host": [ "{{base_url}}" ], "path": [ "api", "auth", "forgot-password", "verify-code" ] }
           }
         },
         {
@@ -145,285 +99,89 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"resetToken\": \"<resetToken>\",\n  \"newPassword\": \"NewPass@123\",\n  \"confirmPassword\": \"NewPass@123\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/auth/reset-password",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "auth", "reset-password" ]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"resetToken\": \"<resetToken>\",\n  \"newPassword\": \"NewPass@123\",\n  \"confirmPassword\": \"NewPass@123\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/auth/reset-password", "host": [ "{{base_url}}" ], "path": [ "api", "auth", "reset-password" ] }
           }
         }
       ]
     },
     {
       "name": "Tenant",
-      "description": "Эндпоинты личного кабинета арендатора (роль TENANT).",
+      "description": "Личный кабинет арендатора (роль TENANT).",
       "item": [
-        {
-          "name": "Get Profile",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/tenant/profile",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "tenant", "profile" ]
-            }
-          }
-        },
-        {
-          "name": "Next Payment",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/tenant/payments/next",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "tenant", "payments", "next" ]
-            }
-          }
-        },
-        {
-          "name": "Payment History",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/tenant/payments/history",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "tenant", "payments", "history" ]
-            }
-          }
-        },
-        {
-          "name": "Notifications",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/tenant/notifications",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "tenant", "notifications" ]
-            }
-          }
-        },
-        {
-          "name": "Mark All Notifications Read",
-          "request": {
-            "method": "PATCH",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/tenant/notifications/read-all",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "tenant", "notifications", "read-all" ]
-            }
-          }
-        },
-        {
-          "name": "Bank Links",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/tenant/bank-links",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "tenant", "bank-links" ]
-            }
-          }
-        },
-        {
-          "name": "Payment Methods",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/tenant/payment-methods",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "tenant", "payment-methods" ]
-            }
-          }
-        },
+        { "name": "Get Profile", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/tenant/profile", "host": [ "{{base_url}}" ], "path": [ "api", "tenant", "profile" ] } } },
+        { "name": "Next Payment", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/tenant/payments/next", "host": [ "{{base_url}}" ], "path": [ "api", "tenant", "payments", "next" ] } } },
+        { "name": "Payment History", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/tenant/payments/history", "host": [ "{{base_url}}" ], "path": [ "api", "tenant", "payments", "history" ] } } },
+        { "name": "Notifications", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/tenant/notifications", "host": [ "{{base_url}}" ], "path": [ "api", "tenant", "notifications" ] } } },
+        { "name": "Mark All Notifications Read", "request": { "method": "PATCH", "header": [], "url": { "raw": "{{base_url}}/api/tenant/notifications/read-all", "host": [ "{{base_url}}" ], "path": [ "api", "tenant", "notifications", "read-all" ] } } },
+        { "name": "Bank Links", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/tenant/bank-links", "host": [ "{{base_url}}" ], "path": [ "api", "tenant", "bank-links" ] } } },
+        { "name": "Payment Methods", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/tenant/payment-methods", "host": [ "{{base_url}}" ], "path": [ "api", "tenant", "payment-methods" ] } } },
         {
           "name": "Payment Method QR (image)",
           "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/tenant/payment-methods/:id/qr",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "tenant", "payment-methods", ":id", "qr" ],
-              "variable": [ { "key": "id", "value": "1", "description": "ID способа оплаты" } ]
-            },
-            "description": "Возвращает изображение QR-кода (image/png и т.п.)."
+            "method": "GET", "header": [],
+            "url": { "raw": "{{base_url}}/api/tenant/payment-methods/:id/qr", "host": [ "{{base_url}}" ], "path": [ "api", "tenant", "payment-methods", ":id", "qr" ], "variable": [ { "key": "id", "value": "1", "description": "ID способа оплаты" } ] },
+            "description": "Изображение QR-кода способа оплаты."
           }
         },
         {
           "name": "Submit Payment (multipart)",
           "request": {
-            "method": "POST",
-            "header": [],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                { "key": "methodId", "value": "1", "type": "text", "description": "ID способа оплаты" },
-                { "key": "amount", "value": "5000", "type": "text", "description": "Сумма платежа" },
-                { "key": "receipt", "type": "file", "src": [], "description": "Файл чека об оплате" }
-              ]
-            },
-            "url": {
-              "raw": "{{base_url}}/api/tenant/payments",
-              "host": [ "{{base_url}}" ],
-              "path": [ "api", "tenant", "payments" ]
-            },
-            "description": "Отправить платёж на проверку. Статус платежа становится PENDING. Прикрепите файл чека в поле receipt."
+            "method": "POST", "header": [],
+            "body": { "mode": "formdata", "formdata": [
+              { "key": "methodId", "value": "1", "type": "text", "description": "ID способа оплаты" },
+              { "key": "amount", "value": "5000", "type": "text", "description": "Сумма платежа" },
+              { "key": "receipt", "type": "file", "src": [], "description": "Файл чека об оплате" }
+            ] },
+            "url": { "raw": "{{base_url}}/api/tenant/payments", "host": [ "{{base_url}}" ], "path": [ "api", "tenant", "payments" ] },
+            "description": "Отправить платёж на модерацию. Статус -> PENDING, долг не списывается."
           }
         }
       ]
     },
     {
       "name": "Admin",
-      "description": "Эндпоинты панели администратора (роль ADMIN).",
+      "description": "Панель администратора (роль ADMIN).",
       "item": [
         {
           "name": "Dashboard & Analytics",
           "item": [
-            {
-              "name": "Dashboard",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/dashboard",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "dashboard" ]
-                }
-              }
-            },
-            {
-              "name": "Analytics",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/analytics",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "analytics" ]
-                }
-              }
-            },
-            {
-              "name": "Debtors",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/debtors",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "debtors" ]
-                }
-              }
-            }
+            { "name": "Dashboard", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/admin/dashboard", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "dashboard" ] } } },
+            { "name": "Analytics", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/admin/analytics", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "analytics" ] } } },
+            { "name": "Debtors", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/admin/debtors", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "debtors" ] } } }
           ]
         },
         {
           "name": "Tenants",
           "item": [
-            {
-              "name": "List",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/tenants",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "tenants" ]
-                }
-              }
-            },
+            { "name": "List", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/admin/tenants", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "tenants" ] } } },
             {
               "name": "Create",
               "request": {
-                "method": "POST",
-                "header": [ { "key": "Content-Type", "value": "application/json" } ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"fullName\": \"Иванов Иван Иванович\",\n  \"inn\": \"12345678901234\",\n  \"phone\": \"+996700123456\",\n  \"email\": \"tenant@example.com\",\n  \"passportSeries\": \"AN\",\n  \"passportNumber\": \"1234567\",\n  \"passportIssuedDate\": \"2018-05-20\",\n  \"passportIssuedBy\": \"МКК 50-01\",\n  \"placeNumber\": \"A-12\",\n  \"monthlyRent\": 5000,\n  \"aisle\": \"Проход 1\",\n  \"department\": \"Овощи\",\n  \"startDate\": \"2026-01-01\"\n}",
-                  "options": { "raw": { "language": "json" } }
-                },
-                "url": {
-                  "raw": "{{base_url}}/api/admin/tenants",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "tenants" ]
-                },
-                "description": "Создать арендатора вместе с торговым местом. placeNumber формата буква-цифры (A-12)."
+                "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Иванов Иван Иванович\",\n  \"inn\": \"12345678901234\",\n  \"phone\": \"+996700123456\",\n  \"email\": \"tenant@example.com\",\n  \"passportSeries\": \"AN\",\n  \"passportNumber\": \"1234567\",\n  \"passportIssuedDate\": \"2018-05-20\",\n  \"passportIssuedBy\": \"МКК 50-01\",\n  \"placeNumber\": \"A-12\",\n  \"monthlyRent\": 5000,\n  \"aisle\": \"Проход 1\",\n  \"department\": \"Овощи\",\n  \"startDate\": \"2026-01-01\"\n}", "options": { "raw": { "language": "json" } } },
+                "url": { "raw": "{{base_url}}/api/admin/tenants", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "tenants" ] },
+                "description": "Создать арендатора + место. placeNumber формата буква-цифры (A-12)."
               }
             },
-            {
-              "name": "Get By Id",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/tenants/:id",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "tenants", ":id" ],
-                  "variable": [ { "key": "id", "value": "1" } ]
-                }
-              }
-            },
+            { "name": "Get By Id", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/admin/tenants/:id", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "tenants", ":id" ], "variable": [ { "key": "id", "value": "1" } ] } } },
             {
               "name": "Update",
               "request": {
-                "method": "PUT",
-                "header": [ { "key": "Content-Type", "value": "application/json" } ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"fullName\": \"Иванов Иван Петрович\",\n  \"phone\": \"+996700999888\",\n  \"email\": \"new@example.com\",\n  \"monthlyRent\": 5500\n}",
-                  "options": { "raw": { "language": "json" } }
-                },
-                "url": {
-                  "raw": "{{base_url}}/api/admin/tenants/:id",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "tenants", ":id" ],
-                  "variable": [ { "key": "id", "value": "1" } ]
-                },
+                "method": "PUT", "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Иванов Иван Петрович\",\n  \"phone\": \"+996700999888\",\n  \"email\": \"new@example.com\",\n  \"monthlyRent\": 5500\n}", "options": { "raw": { "language": "json" } } },
+                "url": { "raw": "{{base_url}}/api/admin/tenants/:id", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "tenants", ":id" ], "variable": [ { "key": "id", "value": "1" } ] },
                 "description": "Все поля опциональны — обновляются только переданные."
               }
             },
-            {
-              "name": "Delete (soft)",
-              "request": {
-                "method": "DELETE",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/tenants/:id",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "tenants", ":id" ],
-                  "variable": [ { "key": "id", "value": "1" } ]
-                }
-              }
-            },
+            { "name": "Delete (soft)", "request": { "method": "DELETE", "header": [], "url": { "raw": "{{base_url}}/api/admin/tenants/:id", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "tenants", ":id" ], "variable": [ { "key": "id", "value": "1" } ] } } },
             {
               "name": "Record Payment (cash)",
               "request": {
-                "method": "POST",
-                "header": [ { "key": "Content-Type", "value": "application/json" } ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"amount\": 5000,\n  \"paymentDate\": \"2026-05-30\",\n  \"description\": \"Наличными в кассу\"\n}",
-                  "options": { "raw": { "language": "json" } }
-                },
-                "url": {
-                  "raw": "{{base_url}}/api/admin/tenants/:id/payment",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "tenants", ":id", "payment" ],
-                  "variable": [ { "key": "id", "value": "1", "description": "ID арендатора" } ]
-                },
-                "description": "Ручной (наличный) платёж — сразу APPROVED, списывает долг. paymentDate и description опциональны."
+                "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "body": { "mode": "raw", "raw": "{\n  \"amount\": 5000,\n  \"paymentDate\": \"2026-05-30\",\n  \"description\": \"Наличными в кассу\"\n}", "options": { "raw": { "language": "json" } } },
+                "url": { "raw": "{{base_url}}/api/admin/tenants/:id/payment", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "tenants", ":id", "payment" ], "variable": [ { "key": "id", "value": "1", "description": "ID арендатора" } ] },
+                "description": "Ручной (наличный) платёж — сразу APPROVED, списывает долг."
               }
             }
           ]
@@ -431,64 +189,16 @@
         {
           "name": "Payments (Moderation)",
           "item": [
-            {
-              "name": "Pending",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/payments/pending",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "payments", "pending" ]
-                },
-                "description": "Список онлайн-платежей на модерации."
-              }
-            },
-            {
-              "name": "Get Receipt",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/payments/:id/receipt",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "payments", ":id", "receipt" ],
-                  "variable": [ { "key": "id", "value": "1", "description": "ID платежа" } ]
-                },
-                "description": "Просмотр чека об оплате (файл из MinIO)."
-              }
-            },
-            {
-              "name": "Approve",
-              "request": {
-                "method": "POST",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/payments/:id/approve",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "payments", ":id", "approve" ],
-                  "variable": [ { "key": "id", "value": "1", "description": "ID платежа" } ]
-                },
-                "description": "Подтвердить платёж: статус APPROVED, долг списывается."
-              }
-            },
+            { "name": "Pending", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/admin/payments/pending", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "payments", "pending" ] }, "description": "Онлайн-платежи на модерации." } },
+            { "name": "Get Receipt", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/admin/payments/:id/receipt", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "payments", ":id", "receipt" ], "variable": [ { "key": "id", "value": "1", "description": "ID платежа" } ] }, "description": "Просмотр чека (файл из MinIO)." } },
+            { "name": "Approve", "request": { "method": "POST", "header": [], "url": { "raw": "{{base_url}}/api/admin/payments/:id/approve", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "payments", ":id", "approve" ], "variable": [ { "key": "id", "value": "1", "description": "ID платежа" } ] }, "description": "Подтвердить: статус APPROVED, долг списывается." } },
             {
               "name": "Reject",
               "request": {
-                "method": "POST",
-                "header": [ { "key": "Content-Type", "value": "application/json" } ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"reason\": \"Чек нечитаемый / сумма не совпадает\"\n}",
-                  "options": { "raw": { "language": "json" } }
-                },
-                "url": {
-                  "raw": "{{base_url}}/api/admin/payments/:id/reject",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "payments", ":id", "reject" ],
-                  "variable": [ { "key": "id", "value": "1", "description": "ID платежа" } ]
-                },
-                "description": "Отклонить платёж: статус REJECTED, причина обязательна."
+                "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Чек нечитаемый / сумма не совпадает\"\n}", "options": { "raw": { "language": "json" } } },
+                "url": { "raw": "{{base_url}}/api/admin/payments/:id/reject", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "payments", ":id", "reject" ], "variable": [ { "key": "id", "value": "1", "description": "ID платежа" } ] },
+                "description": "Отклонить: статус REJECTED, причина обязательна."
               }
             }
           ]
@@ -496,71 +206,30 @@
         {
           "name": "Payment Methods",
           "item": [
-            {
-              "name": "List",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/payment-methods",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "payment-methods" ]
-                }
-              }
-            },
+            { "name": "List", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/admin/payment-methods", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "payment-methods" ] } } },
             {
               "name": "Create",
               "request": {
-                "method": "POST",
-                "header": [ { "key": "Content-Type", "value": "application/json" } ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"name\": \"Оплата по QR (МБанк)\",\n  \"requisites\": \"Отсканируйте QR в приложении банка и переведите точную сумму.\",\n  \"active\": true,\n  \"sortOrder\": 1\n}",
-                  "options": { "raw": { "language": "json" } }
-                },
-                "url": {
-                  "raw": "{{base_url}}/api/admin/payment-methods",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "payment-methods" ]
-                }
+                "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "body": { "mode": "raw", "raw": "{\n  \"name\": \"Оплата по QR (МБанк)\",\n  \"requisites\": \"Отсканируйте QR в приложении банка и переведите точную сумму.\",\n  \"active\": true,\n  \"sortOrder\": 1\n}", "options": { "raw": { "language": "json" } } },
+                "url": { "raw": "{{base_url}}/api/admin/payment-methods", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "payment-methods" ] }
               }
             },
             {
               "name": "Update",
               "request": {
-                "method": "PUT",
-                "header": [ { "key": "Content-Type", "value": "application/json" } ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"name\": \"Оплата по QR\",\n  \"requisites\": \"Новые реквизиты\",\n  \"active\": true,\n  \"sortOrder\": 1\n}",
-                  "options": { "raw": { "language": "json" } }
-                },
-                "url": {
-                  "raw": "{{base_url}}/api/admin/payment-methods/:id",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "payment-methods", ":id" ],
-                  "variable": [ { "key": "id", "value": "1" } ]
-                }
+                "method": "PUT", "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "body": { "mode": "raw", "raw": "{\n  \"name\": \"Оплата по QR\",\n  \"requisites\": \"Новые реквизиты\",\n  \"active\": true,\n  \"sortOrder\": 1\n}", "options": { "raw": { "language": "json" } } },
+                "url": { "raw": "{{base_url}}/api/admin/payment-methods/:id", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "payment-methods", ":id" ], "variable": [ { "key": "id", "value": "1" } ] }
               }
             },
             {
               "name": "Upload QR (multipart)",
               "request": {
-                "method": "POST",
-                "header": [],
-                "body": {
-                  "mode": "formdata",
-                  "formdata": [
-                    { "key": "qr", "type": "file", "src": [], "description": "Изображение QR-кода (PNG/JPG)" }
-                  ]
-                },
-                "url": {
-                  "raw": "{{base_url}}/api/admin/payment-methods/:id/qr",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "payment-methods", ":id", "qr" ],
-                  "variable": [ { "key": "id", "value": "1", "description": "ID способа оплаты" } ]
-                },
-                "description": "Загрузить/заменить QR-код способа оплаты. Файл в поле qr."
+                "method": "POST", "header": [],
+                "body": { "mode": "formdata", "formdata": [ { "key": "qr", "type": "file", "src": [], "description": "Изображение QR-кода (PNG/JPG)" } ] },
+                "url": { "raw": "{{base_url}}/api/admin/payment-methods/:id/qr", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "payment-methods", ":id", "qr" ], "variable": [ { "key": "id", "value": "1", "description": "ID способа оплаты" } ] },
+                "description": "Загрузить/заменить QR-код способа оплаты."
               }
             }
           ]
@@ -568,62 +237,18 @@
         {
           "name": "Places",
           "item": [
-            {
-              "name": "Free",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/places/free",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "places", "free" ]
-                }
-              }
-            },
-            {
-              "name": "Occupied",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/places/occupied",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "places", "occupied" ]
-                }
-              }
-            },
+            { "name": "Free", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/admin/places/free", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "places", "free" ] } } },
+            { "name": "Occupied", "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/admin/places/occupied", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "places", "occupied" ] } } },
             {
               "name": "Book",
               "request": {
-                "method": "POST",
-                "header": [ { "key": "Content-Type", "value": "application/json" } ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"fullName\": \"Петров Пётр\",\n  \"inn\": \"98765432109876\",\n  \"phone\": \"+996700111222\",\n  \"email\": \"petrov@example.com\",\n  \"passportSeries\": \"AN\",\n  \"passportNumber\": \"7654321\",\n  \"passportIssuedDate\": \"2019-03-10\",\n  \"passportIssuedBy\": \"МКК 50-02\",\n  \"startDate\": \"2026-02-01\"\n}",
-                  "options": { "raw": { "language": "json" } }
-                },
-                "url": {
-                  "raw": "{{base_url}}/api/admin/places/:id/book",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "places", ":id", "book" ],
-                  "variable": [ { "key": "id", "value": "1", "description": "ID места" } ]
-                },
+                "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Петров Пётр\",\n  \"inn\": \"98765432109876\",\n  \"phone\": \"+996700111222\",\n  \"email\": \"petrov@example.com\",\n  \"passportSeries\": \"AN\",\n  \"passportNumber\": \"7654321\",\n  \"passportIssuedDate\": \"2019-03-10\",\n  \"passportIssuedBy\": \"МКК 50-02\",\n  \"startDate\": \"2026-02-01\"\n}", "options": { "raw": { "language": "json" } } },
+                "url": { "raw": "{{base_url}}/api/admin/places/:id/book", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "places", ":id", "book" ], "variable": [ { "key": "id", "value": "1", "description": "ID места" } ] },
                 "description": "Забронировать свободное место за новым арендатором."
               }
             },
-            {
-              "name": "Release",
-              "request": {
-                "method": "POST",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/places/:id/release",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "places", ":id", "release" ],
-                  "variable": [ { "key": "id", "value": "1", "description": "ID места" } ]
-                }
-              }
-            }
+            { "name": "Release", "request": { "method": "POST", "header": [], "url": { "raw": "{{base_url}}/api/admin/places/:id/release", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "places", ":id", "release" ], "variable": [ { "key": "id", "value": "1", "description": "ID места" } ] } } }
           ]
         },
         {
@@ -632,15 +257,9 @@
             {
               "name": "Export",
               "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/reports/export?type=excel",
-                  "host": [ "{{base_url}}" ],
-                  "path": [ "api", "admin", "reports", "export" ],
-                  "query": [ { "key": "type", "value": "excel", "description": "excel | pdf | txt" } ]
-                },
-                "description": "Экспорт отчёта. Параметр type: excel (по умолчанию), pdf или txt."
+                "method": "GET", "header": [],
+                "url": { "raw": "{{base_url}}/api/admin/reports/export?type=excel", "host": [ "{{base_url}}" ], "path": [ "api", "admin", "reports", "export" ], "query": [ { "key": "type", "value": "excel", "description": "excel | pdf | txt" } ] },
+                "description": "Экспорт отчёта. type: excel (по умолчанию), pdf или txt."
               }
             }
           ]

@@ -58,8 +58,6 @@ app:
     lockout-minutes: 15
   from-email: ${MAIL_FROM:noreply@oshmarket.kg}
   from-name: "Ошский Рынок"
-  sms:
-    enabled: ${SMS_ENABLED:false}
 
 logging:
   level:
