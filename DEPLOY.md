@@ -6,7 +6,7 @@
 push/merge в main ──► GitHub Actions ──SSH──► сервер: git pull + docker compose up -d --build
 ```
 
-- **Код:** GitHub `zhumka/oah_marketBackend` (публичный — сервер тянет по HTTPS без авторизации).
+- **Код:** GitHub `zhumka/osh_marketBackend` (публичный — сервер тянет по HTTPS без авторизации).
 - **Приложение:** работает в Docker Compose на сервере (app + PostgreSQL + MinIO).
 - **CI:** `.github/workflows/deploy.yml` — подключается к серверу по SSH и обновляет контейнеры.
 
@@ -39,7 +39,7 @@ chmod 600 ~/.ssh/authorized_keys
 ### 1.3. Склонировать репозиторий
 ```bash
 sudo mkdir -p /opt/oahmarket && sudo chown $USER:$USER /opt/oahmarket
-git clone https://github.com/zhumka/oah_marketBackend.git /opt/oahmarket
+git clone https://github.com/zhumka/osh_marketBackend.git /opt/oahmarket
 cd /opt/oahmarket
 ```
 
