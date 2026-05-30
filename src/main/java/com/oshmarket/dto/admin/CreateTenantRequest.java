@@ -13,6 +13,7 @@ public class CreateTenantRequest {
     private String fullName;
 
     @NotBlank(message = "ИНН обязателен")
+    @Pattern(regexp = "\\d{14}", message = "ИНН должен содержать ровно 14 цифр")
     private String inn;
 
     private String phone;

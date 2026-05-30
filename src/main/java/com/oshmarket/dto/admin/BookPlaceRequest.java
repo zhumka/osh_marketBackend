@@ -2,6 +2,7 @@ package com.oshmarket.dto.admin;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -13,6 +14,7 @@ public class BookPlaceRequest {
     private String fullName;
 
     @NotBlank(message = "ИНН арендатора обязателен")
+    @Pattern(regexp = "\\d{14}", message = "ИНН должен содержать ровно 14 цифр")
     private String inn;
 
     private String phone;

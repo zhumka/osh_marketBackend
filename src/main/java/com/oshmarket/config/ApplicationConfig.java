@@ -19,11 +19,11 @@ public class ApplicationConfig {
     @Bean
     public ApplicationRunner initAdminPassword() {
         return args -> {
-            userRepository.findByInnAndDeletedFalse("0000000000").ifPresent(admin -> {
+            userRepository.findByInnAndDeletedFalse("00000000000000").ifPresent(admin -> {
                 if (admin.getPasswordHash().contains("PLACEHOLDER")) {
                     admin.setPasswordHash(passwordEncoder.encode("Admin@123456"));
                     userRepository.save(admin);
-                    log.info("Admin default password initialized. INN: 0000000000, Password: Admin@123456");
+                    log.info("Admin default password initialized. INN: 00000000000000, Password: Admin@123456");
                 }
             });
         };
