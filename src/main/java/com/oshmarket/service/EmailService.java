@@ -1,84 +1,95 @@
 package com.oshmarket.service;
 
-import jakarta.mail.internet.MimeMessage;
-import lombok.RequiredArgsConstructor;
+import com.resend.Resend;
+import com.resend.core.exception.ResendException;
+import com.resend.services.emails.model.CreateEmailOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class EmailService {
 
-    private final JavaMailSender mailSender;
-
-    @Value("${app.from-email}")
-    private String fromEmail;
+    @Value("${resend.api-key:}")
+    private String apiKey;
 
     @Value("${app.from-name}")
     private String fromName;
 
-    /** Аутентифицированный SMTP-аккаунт. Для Gmail отправитель должен совпадать с ним. */
-    @Value("${spring.mail.username:}")
-    private String smtpUsername;
+    @Value("${app.resend-from}")
+    private String fromAddress;
 
-    // ---- Брендовые цвета и шрифт шаблона ----
-    private static final String FONT = "'Segoe UI', Roboto, Oxygen, Ubuntu, 'Helvetica Neue', Arial, sans-serif";
-    private static final String BRAND = "#16a34a";        // основной зелёный
-    private static final String BRAND_DARK = "#15803d";
-    private static final String TEXT = "#1f2937";
-    private static final String MUTED = "#6b7280";
-    private static final String BG = "#f4f6f8";
+    // ---- Дизайн-токены (совпадают со стилем веб-приложения) ----
+    private static final String FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+    private static final String ACCENT     = "#0a0a0a";
+    private static final String TEXT       = "#0a0a0a";
+    private static final String TEXT_SEC   = "#525252";
+    private static final String MUTED      = "#737373";
+    private static final String BORDER     = "#e5e5e5";
+    private static final String BG         = "#fafafa";
+    private static final String CARD_BG    = "#ffffff";
+    private static final String SUBTLE_BG  = "#f5f5f5";
 
-    // ============================ Публичные письма ============================
+    // ============================ Публичные методы ============================
 
+    @Async("mailExecutor")
     public void sendPasswordResetCode(String toEmail, String code) {
         String body = """
-                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:%TEXT%;">
-                  Здравствуйте! Вы запросили восстановление пароля в системе «Ошский рынок».
-                  Введите код подтверждения ниже, чтобы продолжить:
+                <p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:%TEXT%;">
+                  Здравствуйте!
+                </p>
+                <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:%TEXT_SEC%;">
+                  Вы запросили восстановление пароля в системе «Ошский рынок».
+                  Используйте код подтверждения ниже, чтобы продолжить.
                 </p>
                 %CODE_BOX%
-                <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:%MUTED%;">
-                  Код действителен <b>15 минут</b>. Если вы не запрашивали сброс пароля —
-                  просто проигнорируйте это письмо.
-                </p>
+                <div style="margin:24px 0 0;padding:16px;background:%SUBTLE_BG%;border-radius:8px;">
+                  <p style="margin:0;font-size:13px;line-height:1.6;color:%TEXT_SEC%;">
+                    Код действителен <strong style="color:%TEXT%;">15 минут</strong>.
+                    Если вы не запрашивали восстановление пароля — просто проигнорируйте это письмо.
+                  </p>
+                </div>
                 """
                 .replace("%CODE_BOX%", codeBox(code))
                 .replace("%TEXT%", TEXT)
-                .replace("%MUTED%", MUTED);
+                .replace("%TEXT_SEC%", TEXT_SEC)
+                .replace("%SUBTLE_BG%", SUBTLE_BG);
 
         sendHtml(toEmail, "Код восстановления пароля — Ошский рынок",
                 render("Восстановление пароля", body));
     }
 
+    @Async("mailExecutor")
     public void sendTenantCredentials(String toEmail, String inn, String tempPassword) {
         String body = """
-                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:%TEXT%;">
-                  Добро пожаловать в систему управления «Ошский рынок»!
-                  Для вас создан личный кабинет арендатора. Данные для входа:
+                <p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:%TEXT%;">
+                  Добро пожаловать!
+                </p>
+                <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:%TEXT_SEC%;">
+                  Для вас создан личный кабинет арендатора в системе управления «Ошский рынок».
+                  Используйте данные ниже для входа в систему.
                 </p>
                 %CREDS_BOX%
-                <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:%MUTED%;">
-                  В целях безопасности <b>смените пароль</b> сразу после первого входа.
-                </p>
+                <div style="margin:24px 0 0;padding:16px;background:%SUBTLE_BG%;border-radius:8px;border-left:3px solid %ACCENT%;">
+                  <p style="margin:0;font-size:13px;line-height:1.6;color:%TEXT_SEC%;">
+                    В целях безопасности <strong style="color:%TEXT%;">смените пароль</strong> сразу после первого входа в систему.
+                  </p>
+                </div>
                 """
                 .replace("%CREDS_BOX%", credentialsBox(inn, tempPassword))
                 .replace("%TEXT%", TEXT)
-                .replace("%MUTED%", MUTED);
+                .replace("%TEXT_SEC%", TEXT_SEC)
+                .replace("%SUBTLE_BG%", SUBTLE_BG)
+                .replace("%ACCENT%", ACCENT);
 
         sendHtml(toEmail, "Ваши данные для входа — Ошский рынок",
-                render("Добро пожаловать!", body));
+                render("Добро пожаловать", body));
     }
 
     // ============================ Шаблон ============================
 
-    /** Единый каркас письма: шапка с брендом, заголовок, контент, подвал. */
     private String render(String heading, String contentHtml) {
         return """
                 <!DOCTYPE html>
@@ -86,26 +97,40 @@ public class EmailService {
                 <head>
                   <meta charset="UTF-8">
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Ошский рынок</title>
                 </head>
                 <body style="margin:0;padding:0;background:%BG%;font-family:%FONT%;-webkit-font-smoothing:antialiased;">
-                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:%BG%;">
+                  <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="background:%BG%;">
                     <tr>
-                      <td align="center" style="padding:32px 16px;">
-                        <table role="presentation" width="600" cellpadding="0" cellspacing="0"
-                               style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;
-                                      box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                      <td align="center" style="padding:40px 16px;">
+                        <table role="presentation" width="560" cellpadding="0" cellspacing="0"
+                               style="max-width:560px;width:100%%;background:%CARD_BG%;border-radius:12px;
+                                      overflow:hidden;border:1px solid %BORDER%;">
                           <!-- Шапка -->
                           <tr>
-                            <td style="background:%BRAND%;padding:24px 32px;">
-                              <span style="color:#ffffff;font-family:%FONT%;font-size:20px;font-weight:700;letter-spacing:0.3px;">
-                                🛒 Ошский рынок
-                              </span>
+                            <td style="padding:24px 32px;border-bottom:1px solid %BORDER%;">
+                              <table role="presentation" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td style="background:%ACCENT%;width:36px;height:36px;border-radius:8px;
+                                             text-align:center;vertical-align:middle;">
+                                    <span style="color:#ffffff;font-family:%FONT%;font-size:18px;
+                                                 font-weight:700;line-height:36px;">О</span>
+                                  </td>
+                                  <td style="padding-left:12px;vertical-align:middle;">
+                                    <div style="font-family:%FONT%;font-size:15px;font-weight:600;
+                                                color:%TEXT%;line-height:1.2;">Ошский рынок</div>
+                                    <div style="font-family:%FONT%;font-size:12px;color:%MUTED%;
+                                                line-height:1.4;margin-top:2px;">Система управления</div>
+                                  </td>
+                                </tr>
+                              </table>
                             </td>
                           </tr>
                           <!-- Контент -->
                           <tr>
                             <td style="padding:32px;">
-                              <h1 style="margin:0 0 20px;font-family:%FONT%;font-size:22px;font-weight:700;color:%TEXT%;">
+                              <h1 style="margin:0 0 24px;font-family:%FONT%;font-size:24px;font-weight:700;
+                                         color:%TEXT%;line-height:1.3;letter-spacing:-0.02em;">
                                 %HEADING%
                               </h1>
                               %CONTENT%
@@ -113,9 +138,13 @@ public class EmailService {
                           </tr>
                           <!-- Подвал -->
                           <tr>
-                            <td style="padding:20px 32px;background:#f0f2f5;font-family:%FONT%;font-size:12px;line-height:1.6;color:%MUTED%;">
-                              Это автоматическое письмо — отвечать на него не нужно.<br>
-                              © Ошский рынок. Система управления арендой торговых мест.
+                            <td style="padding:20px 32px;background:%SUBTLE_BG%;border-top:1px solid %BORDER%;">
+                              <p style="margin:0;font-family:%FONT%;font-size:12px;line-height:1.6;color:%MUTED%;">
+                                Это автоматическое письмо — отвечать на него не нужно.
+                              </p>
+                              <p style="margin:6px 0 0;font-family:%FONT%;font-size:12px;line-height:1.6;color:%MUTED%;">
+                                © Ошский рынок · Система управления арендой торговых мест
+                              </p>
                             </td>
                           </tr>
                         </table>
@@ -128,44 +157,62 @@ public class EmailService {
                 .replace("%HEADING%", heading)
                 .replace("%CONTENT%", contentHtml)
                 .replace("%FONT%", FONT)
-                .replace("%BRAND%", BRAND)
+                .replace("%ACCENT%", ACCENT)
                 .replace("%BG%", BG)
+                .replace("%CARD_BG%", CARD_BG)
+                .replace("%SUBTLE_BG%", SUBTLE_BG)
                 .replace("%TEXT%", TEXT)
-                .replace("%MUTED%", MUTED);
+                .replace("%MUTED%", MUTED)
+                .replace("%BORDER%", BORDER);
     }
 
-    /** Блок с кодом подтверждения. */
     private String codeBox(String code) {
         return """
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="margin:0;">
                   <tr>
-                    <td align="center" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;">
-                      <div style="font-family:%FONT%;font-size:13px;color:%BRAND_DARK%;margin-bottom:8px;">Код подтверждения</div>
-                      <div style="font-family:'Courier New',monospace;font-size:34px;font-weight:700;letter-spacing:10px;color:%BRAND_DARK%;">%CODE%</div>
+                    <td align="center" style="background:%SUBTLE_BG%;border:1px solid %BORDER%;
+                                              border-radius:12px;padding:28px 20px;">
+                      <div style="font-family:%FONT%;font-size:12px;font-weight:500;color:%MUTED%;
+                                  text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;">
+                        Код подтверждения
+                      </div>
+                      <div style="font-family:'SF Mono','Monaco','Roboto Mono','Courier New',monospace;
+                                  font-size:36px;font-weight:700;letter-spacing:8px;color:%TEXT%;line-height:1;">
+                        %CODE%
+                      </div>
                     </td>
                   </tr>
                 </table>
                 """
                 .replace("%CODE%", code)
                 .replace("%FONT%", FONT)
-                .replace("%BRAND_DARK%", BRAND_DARK);
+                .replace("%TEXT%", TEXT)
+                .replace("%MUTED%", MUTED)
+                .replace("%SUBTLE_BG%", SUBTLE_BG)
+                .replace("%BORDER%", BORDER);
     }
 
-    /** Блок с реквизитами для входа (ИНН + пароль). */
     private String credentialsBox(String inn, String password) {
         return """
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-                       style="margin:24px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+                <table role="presentation" width="100%%" cellpadding="0" cellspacing="0"
+                       style="margin:0;background:%CARD_BG%;border:1px solid %BORDER%;
+                              border-radius:12px;overflow:hidden;">
                   <tr>
-                    <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;font-family:%FONT%;">
-                      <span style="display:inline-block;width:80px;font-size:13px;color:%MUTED%;">ИНН</span>
-                      <span style="font-size:16px;font-weight:600;color:%TEXT%;">%INN%</span>
+                    <td style="padding:16px 20px;border-bottom:1px solid %BORDER%;font-family:%FONT%;">
+                      <div style="font-size:12px;font-weight:500;color:%MUTED%;
+                                  text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">ИНН</div>
+                      <div style="font-size:16px;font-weight:600;color:%TEXT%;
+                                  font-family:'SF Mono','Monaco','Roboto Mono','Courier New',monospace;
+                                  letter-spacing:0.5px;">%INN%</div>
                     </td>
                   </tr>
                   <tr>
                     <td style="padding:16px 20px;font-family:%FONT%;">
-                      <span style="display:inline-block;width:80px;font-size:13px;color:%MUTED%;">Пароль</span>
-                      <span style="font-size:16px;font-weight:600;color:%TEXT%;font-family:'Courier New',monospace;">%PASSWORD%</span>
+                      <div style="font-size:12px;font-weight:500;color:%MUTED%;
+                                  text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Временный пароль</div>
+                      <div style="font-size:16px;font-weight:600;color:%TEXT%;
+                                  font-family:'SF Mono','Monaco','Roboto Mono','Courier New',monospace;
+                                  letter-spacing:0.5px;">%PASSWORD%</div>
                     </td>
                   </tr>
                 </table>
@@ -174,28 +221,30 @@ public class EmailService {
                 .replace("%PASSWORD%", password)
                 .replace("%FONT%", FONT)
                 .replace("%TEXT%", TEXT)
-                .replace("%MUTED%", MUTED);
+                .replace("%MUTED%", MUTED)
+                .replace("%CARD_BG%", CARD_BG)
+                .replace("%BORDER%", BORDER);
     }
 
-    // ============================ Отправка ============================
+    // ============================ Отправка через Resend API ============================
 
     private void sendHtml(String to, String subject, String html) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
-            helper.setFrom(senderAddress(), fromName);
-            helper.setTo(to);
-            helper.setSubject(subject);
-            helper.setText(html, true);
-            mailSender.send(message);
-            log.info("Email sent to {}", to);
-        } catch (Exception e) {
-            log.error("Failed to send email to {}: {}", to, e.getMessage());
+        if (apiKey == null || apiKey.isBlank()) {
+            log.warn("RESEND_API_KEY не задан — письмо не отправлено (to={})", to);
+            return;
         }
-    }
-
-    /** Для Gmail отправитель должен быть аутентифицированным аккаунтом, иначе письмо отклоняется. */
-    private String senderAddress() {
-        return (smtpUsername != null && !smtpUsername.isBlank()) ? smtpUsername : fromEmail;
+        try {
+            Resend resend = new Resend(apiKey);
+            CreateEmailOptions params = CreateEmailOptions.builder()
+                    .from(fromName + " <" + fromAddress + ">")
+                    .to(to)
+                    .subject(subject)
+                    .html(html)
+                    .build();
+            resend.emails().send(params);
+            log.info("Email sent via Resend to {}", to);
+        } catch (ResendException e) {
+            log.error("Failed to send email via Resend to {}: {}", to, e.getMessage());
+        }
     }
 }
