@@ -132,7 +132,12 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getDebtors());
     }
 
-    // Places
+    // Places CRUD
+    @GetMapping("/places")
+    public ResponseEntity<List<PlaceDto>> getAllPlaces() {
+        return ResponseEntity.ok(adminService.getAllPlaces());
+    }
+
     @GetMapping("/places/free")
     public ResponseEntity<List<PlaceDto>> getFreePlaces() {
         return ResponseEntity.ok(adminService.getFreePlaces());
@@ -143,11 +148,21 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getOccupiedPlaces());
     }
 
-    @PostMapping("/places/{id}/book")
-    public ResponseEntity<Map<String, String>> bookPlace(@PathVariable Long id,
-                                                          @Valid @RequestBody BookPlaceRequest request) {
-        adminService.bookPlace(id, request);
-        return ResponseEntity.ok(Map.of("message", "Место забронировано"));
+    @PostMapping("/places")
+    public ResponseEntity<PlaceDto> createPlace(@Valid @RequestBody CreatePlaceRequest request) {
+        return ResponseEntity.ok(adminService.createPlace(request));
+    }
+
+    @PutMapping("/places/{id}")
+    public ResponseEntity<PlaceDto> updatePlace(@PathVariable Long id,
+                                                 @Valid @RequestBody CreatePlaceRequest request) {
+        return ResponseEntity.ok(adminService.updatePlace(id, request));
+    }
+
+    @DeleteMapping("/places/{id}")
+    public ResponseEntity<Map<String, String>> deletePlace(@PathVariable Long id) {
+        adminService.deletePlace(id);
+        return ResponseEntity.ok(Map.of("message", "Место удалено"));
     }
 
     @PostMapping("/places/{id}/release")

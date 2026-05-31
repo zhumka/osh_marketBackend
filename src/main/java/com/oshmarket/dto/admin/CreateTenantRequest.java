@@ -3,7 +3,6 @@ package com.oshmarket.dto.admin;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Data
@@ -23,16 +22,8 @@ public class CreateTenantRequest {
     private LocalDate passportIssuedDate;
     private String passportIssuedBy;
 
-    @NotBlank(message = "Номер места обязателен")
-    @Pattern(regexp = "[A-ZА-Я]-\\d+", message = "Формат номера места: буква-цифры (A-12, M-05)")
-    private String placeNumber;
-
-    @NotNull(message = "Стоимость аренды обязательна")
-    @DecimalMin(value = "0.0", inclusive = false, message = "Стоимость аренды должна быть больше 0")
-    private BigDecimal monthlyRent;
-
-    private String aisle;
-    private String department;
+    @NotNull(message = "ID места обязателен")
+    private Long placeId;
 
     @NotNull(message = "Дата начала аренды обязательна")
     private LocalDate startDate;

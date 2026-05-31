@@ -19,4 +19,6 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     long countByOccupiedTrueAndDeletedFalse();
 
     long countByOccupiedFalseAndDeletedFalse();
+
+    List<Place> findAllByDeletedFalseOrderByPlaceNumber();
 }

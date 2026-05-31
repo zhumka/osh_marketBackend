@@ -118,8 +118,11 @@ public class AdminService {
         if (tenantRepository.existsByInnAndDeletedFalse(req.getInn())) {
             throw ApiException.conflict("Пользователь с таким ИНН уже зарегистрирован");
         }
-        if (placeRepository.existsByPlaceNumberAndDeletedFalse(req.getPlaceNumber())) {
-            throw ApiException.conflict("Место с таким номером уже существует");
+
+        Place place = placeRepository.findByIdAndDeletedFalse(req.getPlaceId())
+                .orElseThrow(() -> ApiException.notFound("Место не найдено"));
+        if (place.isOccupied()) {
+            throw ApiException.conflict("Выбранное место уже занято");
         }
 
         String tempPassword = generateTempPassword();
@@ -144,11 +147,6 @@ public class AdminService {
         tenant.setPassportIssuedBy(req.getPassportIssuedBy());
         tenantRepository.save(tenant);
 
-        Place place = new Place();
-        place.setPlaceNumber(req.getPlaceNumber());
-        place.setAisle(req.getAisle());
-        place.setDepartment(req.getDepartment());
-        place.setMonthlyRent(req.getMonthlyRent());
         place.setOccupied(true);
         placeRepository.save(place);
 
@@ -160,9 +158,9 @@ public class AdminService {
 
         sendCredentials(req.getEmail(), req.getInn(), tempPassword);
         notificationService.createSystemNotification(tenant,
-                "Добро пожаловать! Ваше место " + req.getPlaceNumber() + " забронировано.");
+                "Добро пожаловать! Ваше место " + place.getPlaceNumber() + " забронировано.");
 
-        log.info("Tenant created: INN={}, Place={}", req.getInn(), req.getPlaceNumber());
+        log.info("Tenant created: INN={}, Place={}", req.getInn(), place.getPlaceNumber());
         return getTenantDetail(tenant.getId());
     }
 
@@ -372,6 +370,13 @@ public class AdminService {
                 .build();
     }
 
+    public List<PlaceDto> getAllPlaces() {
+        return placeRepository.findAllByDeletedFalseOrderByPlaceNumber()
+                .stream()
+                .map(this::toPlaceDto)
+                .collect(Collectors.toList());
+    }
+
     public List<PlaceDto> getFreePlaces() {
         return placeRepository.findAllByOccupiedFalseAndDeletedFalseOrderByPlaceNumber()
                 .stream()
@@ -387,50 +392,48 @@ public class AdminService {
     }
 
     @Transactional
-    public void bookPlace(Long placeId, BookPlaceRequest req) {
+    public PlaceDto createPlace(CreatePlaceRequest req) {
+        if (placeRepository.existsByPlaceNumberAndDeletedFalse(req.getPlaceNumber())) {
+            throw ApiException.conflict("Место с таким номером уже существует");
+        }
+        Place place = new Place();
+        place.setPlaceNumber(req.getPlaceNumber());
+        place.setAisle(req.getAisle());
+        place.setDepartment(req.getDepartment());
+        place.setMonthlyRent(req.getMonthlyRent());
+        placeRepository.save(place);
+        log.info("Place created: {}", place.getPlaceNumber());
+        return toPlaceDto(place);
+    }
+
+    @Transactional
+    public PlaceDto updatePlace(Long placeId, CreatePlaceRequest req) {
+        Place place = placeRepository.findByIdAndDeletedFalse(placeId)
+                .orElseThrow(() -> ApiException.notFound("Место не найдено"));
+
+        if (!place.getPlaceNumber().equals(req.getPlaceNumber())
+                && placeRepository.existsByPlaceNumberAndDeletedFalse(req.getPlaceNumber())) {
+            throw ApiException.conflict("Место с таким номером уже существует");
+        }
+
+        place.setPlaceNumber(req.getPlaceNumber());
+        place.setAisle(req.getAisle());
+        place.setDepartment(req.getDepartment());
+        place.setMonthlyRent(req.getMonthlyRent());
+        placeRepository.save(place);
+        return toPlaceDto(place);
+    }
+
+    @Transactional
+    public void deletePlace(Long placeId) {
         Place place = placeRepository.findByIdAndDeletedFalse(placeId)
                 .orElseThrow(() -> ApiException.notFound("Место не найдено"));
         if (place.isOccupied()) {
-            throw ApiException.conflict("Место уже занято");
+            throw ApiException.conflict("Нельзя удалить занятое место");
         }
-        if (tenantRepository.existsByInnAndDeletedFalse(req.getInn())) {
-            throw ApiException.conflict("Пользователь с таким ИНН уже зарегистрирован");
-        }
-
-        String tempPassword = generateTempPassword();
-
-        User user = new User();
-        user.setInn(req.getInn());
-        user.setPasswordHash(passwordEncoder.encode(tempPassword));
-        user.setRole(UserRole.TENANT);
-        user.setEmail(req.getEmail());
-        user.setPhone(req.getPhone());
-        userRepository.save(user);
-
-        Tenant tenant = new Tenant();
-        tenant.setUser(user);
-        tenant.setInn(req.getInn());
-        tenant.setFullName(req.getFullName());
-        tenant.setPhone(req.getPhone());
-        tenant.setEmail(req.getEmail());
-        tenant.setPassportSeries(req.getPassportSeries());
-        tenant.setPassportNumber(req.getPassportNumber());
-        tenant.setPassportIssuedDate(req.getPassportIssuedDate());
-        tenant.setPassportIssuedBy(req.getPassportIssuedBy());
-        tenantRepository.save(tenant);
-
-        place.setOccupied(true);
+        place.setDeleted(true);
         placeRepository.save(place);
-
-        RentContract contract = new RentContract();
-        contract.setTenant(tenant);
-        contract.setPlace(place);
-        contract.setStartDate(req.getStartDate());
-        contractRepository.save(contract);
-
-        sendCredentials(req.getEmail(), req.getInn(), tempPassword);
-        notificationService.createSystemNotification(tenant,
-                "Добро пожаловать! Ваше место " + place.getPlaceNumber() + " забронировано.");
+        log.info("Place soft-deleted: id={}", placeId);
     }
 
     @Transactional
