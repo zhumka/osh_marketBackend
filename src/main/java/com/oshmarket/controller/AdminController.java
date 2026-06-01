@@ -48,6 +48,12 @@ public class AdminController {
         return ResponseEntity.ok(adminService.createTenantWithPlace(request));
     }
 
+    @PostMapping("/tenants/{id}/place")
+    public ResponseEntity<TenantDetailDto> assignPlace(@PathVariable Long id,
+                                                        @Valid @RequestBody AssignPlaceRequest request) {
+        return ResponseEntity.ok(adminService.assignPlaceToExistingTenant(id, request));
+    }
+
     @GetMapping("/tenants/{id}")
     public ResponseEntity<TenantDetailDto> getTenant(@PathVariable Long id) {
         return ResponseEntity.ok(adminService.getTenantDetail(id));

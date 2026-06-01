@@ -166,6 +166,38 @@ public class AdminService {
     }
 
     @Transactional
+    public TenantDetailDto assignPlaceToExistingTenant(Long tenantId, AssignPlaceRequest req) {
+        Tenant tenant = tenantRepository.findByIdAndDeletedFalse(tenantId)
+                .orElseThrow(() -> ApiException.notFound("Арендатор не найден"));
+
+        if (contractRepository.findByTenantIdAndActiveTrue(tenantId).isPresent()) {
+            throw ApiException.conflict("У арендатора уже есть активная аренда");
+        }
+
+        Place place = placeRepository.findByIdAndDeletedFalse(req.getPlaceId())
+                .orElseThrow(() -> ApiException.notFound("Место не найдено"));
+        if (place.isOccupied() || contractRepository.existsByPlaceIdAndActiveTrue(place.getId())) {
+            throw ApiException.conflict("Выбранное место уже занято");
+        }
+
+        place.setOccupied(true);
+        placeRepository.save(place);
+
+        RentContract contract = new RentContract();
+        contract.setTenant(tenant);
+        contract.setPlace(place);
+        contract.setStartDate(req.getStartDate());
+        contractRepository.save(contract);
+
+        notificationService.createSystemNotification(tenant,
+                "Ваше место " + place.getPlaceNumber() + " забронировано.");
+        notificationService.createPaymentReminder(tenant, place.getMonthlyRent(), req.getStartDate());
+
+        log.info("Place assigned to existing tenant: tenantId={}, Place={}", tenantId, place.getPlaceNumber());
+        return getTenantDetail(tenantId);
+    }
+
+    @Transactional
     public TenantDetailDto updateTenant(Long tenantId, UpdateTenantRequest req) {
         Tenant tenant = tenantRepository.findByIdAndDeletedFalse(tenantId)
                 .orElseThrow(() -> ApiException.notFound("Арендатор не найден"));

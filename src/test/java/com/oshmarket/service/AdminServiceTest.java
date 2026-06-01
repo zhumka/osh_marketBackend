@@ -1,12 +1,13 @@
 package com.oshmarket.service;
 
+import com.oshmarket.dto.admin.AssignPlaceRequest;
+import com.oshmarket.dto.admin.CreateTenantRequest;
 import com.oshmarket.dto.admin.TenantListItemDto;
 import com.oshmarket.entity.PaymentStatus;
 import com.oshmarket.entity.Place;
 import com.oshmarket.entity.RentContract;
 import com.oshmarket.entity.Tenant;
 import com.oshmarket.entity.User;
-import com.oshmarket.dto.admin.CreateTenantRequest;
 import com.oshmarket.repository.PaymentMethodRepository;
 import com.oshmarket.repository.PaymentRepository;
 import com.oshmarket.repository.PlaceRepository;
@@ -137,6 +138,42 @@ class AdminServiceTest {
                 same(savedTenant.get()), eq(place.getMonthlyRent()), eq(startDate));
     }
 
+    @Test
+    void assignPlaceToExistingTenantCreatesContractForTenantWithoutActiveRent() {
+        LocalDate startDate = LocalDate.now().plusDays(5);
+        AssignPlaceRequest request = assignPlaceRequest(startDate);
+        Tenant tenant = tenant();
+        Place place = place();
+        AtomicReference<RentContract> savedContract = new AtomicReference<>();
+
+        when(tenantRepository.findByIdAndDeletedFalse(tenant.getId())).thenReturn(Optional.of(tenant));
+        when(contractRepository.findByTenantIdAndActiveTrue(tenant.getId()))
+                .thenReturn(Optional.empty())
+                .thenAnswer(invocation -> Optional.of(savedContract.get()));
+        when(placeRepository.findByIdAndDeletedFalse(request.getPlaceId())).thenReturn(Optional.of(place));
+        when(contractRepository.existsByPlaceIdAndActiveTrue(place.getId())).thenReturn(false);
+        when(placeRepository.save(place)).thenReturn(place);
+        when(contractRepository.save(any(RentContract.class))).thenAnswer(invocation -> {
+            RentContract contract = invocation.getArgument(0);
+            contract.setId(3L);
+            savedContract.set(contract);
+            return contract;
+        });
+        when(paymentRepository.findFirstByContractIdAndStatusOrderByPaymentDateDesc(3L, PaymentStatus.APPROVED))
+                .thenReturn(Optional.empty());
+        when(paymentRepository.findAllByTenantId(tenant.getId())).thenReturn(List.of());
+
+        adminService.assignPlaceToExistingTenant(tenant.getId(), request);
+
+        assertThat(place.isOccupied()).isTrue();
+        assertThat(savedContract.get().getTenant()).isSameAs(tenant);
+        assertThat(savedContract.get().getPlace()).isSameAs(place);
+        assertThat(savedContract.get().getStartDate()).isEqualTo(startDate);
+        verify(notificationService).createSystemNotification(same(tenant), anyString());
+        verify(notificationService).createPaymentReminder(
+                same(tenant), eq(place.getMonthlyRent()), eq(startDate));
+    }
+
     private static Tenant tenant() {
         Tenant tenant = new Tenant();
         tenant.setId(1L);
@@ -167,6 +204,13 @@ class AdminServiceTest {
         request.setFullName("Новый Арендатор");
         request.setInn("98765432101234");
         request.setPhone("+996700111222");
+        request.setPlaceId(2L);
+        request.setStartDate(startDate);
+        return request;
+    }
+
+    private static AssignPlaceRequest assignPlaceRequest(LocalDate startDate) {
+        AssignPlaceRequest request = new AssignPlaceRequest();
         request.setPlaceId(2L);
         request.setStartDate(startDate);
         return request;
