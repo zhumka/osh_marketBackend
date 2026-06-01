@@ -27,6 +27,8 @@ public class TenantDetailDto {
     private LocalDate startDate;
     private LocalDate plannedEndDate;
     private BigDecimal debt;
+    private BigDecimal penaltyDebt;
+    private BigDecimal totalDebt;
     private LocalDate lastPaymentDate;
     private boolean hasActiveContract;
     private List<PaymentHistoryItemDto> paymentHistory;

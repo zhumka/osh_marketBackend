@@ -59,7 +59,9 @@ public class TenantCabinetService {
                 .aisle(contract.getPlace().getAisle())
                 .department(contract.getPlace().getDepartment())
                 .monthlyRent(contract.getPlace().getMonthlyRent())
-                .debt(contract.getDebt())
+                .debt(safeAmount(contract.getDebt()))
+                .penaltyDebt(safeAmount(contract.getPenaltyDebt()))
+                .totalDebt(totalDebt(contract))
                 .isActive(true)
                 .lastPaymentDate(lastPayment.map(Payment::getPaymentDate).orElse(null))
                 .startDate(contract.getStartDate())
@@ -73,13 +75,15 @@ public class TenantCabinetService {
                 .orElseThrow(() -> ApiException.notFound("Активный договор не найден"));
 
         BigDecimal monthlyRent = contract.getPlace().getMonthlyRent();
-        BigDecimal debt = contract.getDebt();
-        BigDecimal totalDue = monthlyRent.add(debt.max(BigDecimal.ZERO));
+        BigDecimal debt = safeAmount(contract.getDebt());
+        BigDecimal penaltyDebt = safeAmount(contract.getPenaltyDebt());
+        BigDecimal totalDue = monthlyRent.add(debt.max(BigDecimal.ZERO)).add(penaltyDebt.max(BigDecimal.ZERO));
 
         return NextPaymentDto.builder()
                 .dueDate(debtCalculationService.calculateNextDueDate(contract))
                 .monthlyRent(monthlyRent)
                 .debt(debt)
+                .penaltyDebt(penaltyDebt)
                 .totalDue(totalDue)
                 .build();
     }
@@ -199,5 +203,14 @@ public class TenantCabinetService {
 
     private String getMonthName(Month month) {
         return month.getDisplayName(TextStyle.FULL_STANDALONE, new Locale("ru"));
+    }
+
+    private BigDecimal totalDebt(RentContract contract) {
+        return safeAmount(contract.getDebt()).max(BigDecimal.ZERO)
+                .add(safeAmount(contract.getPenaltyDebt()).max(BigDecimal.ZERO));
+    }
+
+    private BigDecimal safeAmount(BigDecimal amount) {
+        return amount != null ? amount : BigDecimal.ZERO;
     }
 }

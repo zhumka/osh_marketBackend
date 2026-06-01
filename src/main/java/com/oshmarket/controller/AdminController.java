@@ -93,6 +93,15 @@ public class AdminController {
                 .body(receipt.bytes());
     }
 
+    @GetMapping("/contracts/default")
+    public ResponseEntity<byte[]> getDefaultContractTemplate() {
+        FileContent contract = adminService.getDefaultContractTemplate();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + contract.filename() + "\"")
+                .contentType(MediaType.parseMediaType(contract.contentType()))
+                .body(contract.bytes());
+    }
+
     @PostMapping("/payments/{id}/approve")
     public ResponseEntity<Map<String, String>> approvePayment(@PathVariable Long id,
                                                               @AuthenticationPrincipal CustomUserDetails admin) {

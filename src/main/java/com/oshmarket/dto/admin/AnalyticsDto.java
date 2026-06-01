@@ -14,6 +14,7 @@ public class AnalyticsDto {
     private long freePlaces;
     private long debtors;
     private BigDecimal totalDebt;
+    private BigDecimal totalPenaltyDebt;
     private BigDecimal totalMonthlyRevenue;
     private List<DebtorDto> topDebtors;
 }

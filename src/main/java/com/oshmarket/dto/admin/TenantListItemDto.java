@@ -16,5 +16,7 @@ public class TenantListItemDto {
     private String location;
     private BigDecimal monthlyRent;
     private BigDecimal debt;
+    private BigDecimal penaltyDebt;
+    private BigDecimal totalDebt;
     private String status;
 }

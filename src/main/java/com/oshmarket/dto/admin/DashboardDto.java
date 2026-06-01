@@ -14,5 +14,6 @@ public class DashboardDto {
     private long freePlaces;
     private long debtors;
     private BigDecimal totalDebt;
+    private BigDecimal totalPenaltyDebt;
     private List<TenantListItemDto> recentTenants;
 }

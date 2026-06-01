@@ -36,7 +36,7 @@ public class DebtCalculationService {
 
         for (RentContract contract : activeContracts) {
             if (!contract.getStartDate().isAfter(today)) {
-                contract.setDebt(contract.getDebt().add(contract.getPlace().getMonthlyRent()));
+                contract.setDebt(safeAmount(contract.getDebt()).add(contract.getPlace().getMonthlyRent()));
                 rentContractRepository.save(contract);
             }
         }
@@ -79,7 +79,8 @@ public class DebtCalculationService {
     }
 
     private boolean applyLatePaymentPenalty(RentContract contract, LocalDate today) {
-        if (contract.getDebt().compareTo(BigDecimal.ZERO) < 0) {
+        BigDecimal debt = safeAmount(contract.getDebt());
+        if (debt.compareTo(BigDecimal.ZERO) < 0) {
             return false;
         }
 
@@ -97,7 +98,7 @@ public class DebtCalculationService {
             return false;
         }
 
-        if (contract.getDebt().compareTo(BigDecimal.ZERO) == 0 && hasApprovedPaymentForPeriod(contract, dueDate)) {
+        if (debt.compareTo(BigDecimal.ZERO) == 0 && hasApprovedPaymentForPeriod(contract, dueDate)) {
             return false;
         }
 
@@ -106,7 +107,7 @@ public class DebtCalculationService {
             return false;
         }
 
-        contract.setDebt(contract.getDebt().add(penaltyAmount));
+        contract.setPenaltyDebt(safeAmount(contract.getPenaltyDebt()).add(penaltyAmount));
         contract.setLastPenaltyDueDate(dueDate);
         rentContractRepository.save(contract);
         notificationService.createPaymentPenalty(contract.getTenant(), penaltyAmount, dueDate);
@@ -148,5 +149,9 @@ public class DebtCalculationService {
         return contract.getPlace().getMonthlyRent()
                 .multiply(LATE_PAYMENT_PENALTY_RATE)
                 .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal safeAmount(BigDecimal amount) {
+        return amount != null ? amount : BigDecimal.ZERO;
     }
 }

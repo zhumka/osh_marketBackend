@@ -16,6 +16,8 @@ public class TenantProfileDto {
     private String department;
     private BigDecimal monthlyRent;
     private BigDecimal debt;
+    private BigDecimal penaltyDebt;
+    private BigDecimal totalDebt;
     private boolean isActive;
     private LocalDate lastPaymentDate;
     private LocalDate startDate;

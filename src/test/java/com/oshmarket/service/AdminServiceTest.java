@@ -2,6 +2,7 @@ package com.oshmarket.service;
 
 import com.oshmarket.dto.admin.AssignPlaceRequest;
 import com.oshmarket.dto.admin.CreateTenantRequest;
+import com.oshmarket.dto.admin.RecordPaymentRequest;
 import com.oshmarket.dto.admin.TenantListItemDto;
 import com.oshmarket.dto.admin.UpdateTenantRequest;
 import com.oshmarket.entity.PaymentStatus;
@@ -97,6 +98,28 @@ class AdminServiceTest {
         assertThat(tenants).singleElement()
                 .extracting(TenantListItemDto::getStatus)
                 .isEqualTo("Оплачено");
+    }
+
+    @Test
+    void getAllTenantsMarksPenaltyDebtAsUnpaidAndReturnsItSeparately() {
+        Tenant tenant = tenant();
+        RentContract contract = contract(tenant, BigDecimal.ZERO);
+        contract.setPenaltyDebt(new BigDecimal("190.00"));
+
+        when(tenantRepository.findAllByDeletedFalseOrderByCreatedAtDesc()).thenReturn(List.of(tenant));
+        when(contractRepository.findByTenantIdAndActiveTrue(tenant.getId())).thenReturn(Optional.of(contract));
+        when(paymentRepository.existsByContractIdAndStatus(contract.getId(), PaymentStatus.APPROVED))
+                .thenReturn(true);
+
+        List<TenantListItemDto> tenants = adminService.getAllTenants();
+
+        assertThat(tenants).singleElement()
+                .satisfies(dto -> {
+                    assertThat(dto.getStatus()).isEqualTo("Не оплачено");
+                    assertThat(dto.getDebt()).isEqualByComparingTo(BigDecimal.ZERO);
+                    assertThat(dto.getPenaltyDebt()).isEqualByComparingTo(new BigDecimal("190.00"));
+                    assertThat(dto.getTotalDebt()).isEqualByComparingTo(new BigDecimal("190.00"));
+                });
     }
 
     @Test
@@ -200,6 +223,25 @@ class AdminServiceTest {
         assertThat(user.getInn()).isEqualTo(request.getInn());
         verify(userRepository).save(same(user));
         verify(tenantRepository).save(same(tenant));
+    }
+
+    @Test
+    void recordPaymentClearsRentDebtBeforePenaltyDebt() {
+        Tenant tenant = tenant();
+        RentContract contract = contract(tenant, new BigDecimal("1000.00"));
+        contract.setPenaltyDebt(new BigDecimal("200.00"));
+        RecordPaymentRequest request = new RecordPaymentRequest();
+        request.setAmount(new BigDecimal("1100.00"));
+        request.setPaymentDate(LocalDate.of(2026, 6, 1));
+
+        when(tenantRepository.findByIdAndDeletedFalse(tenant.getId())).thenReturn(Optional.of(tenant));
+        when(contractRepository.findByTenantIdAndActiveTrue(tenant.getId())).thenReturn(Optional.of(contract));
+
+        adminService.recordPayment(tenant.getId(), request);
+
+        assertThat(contract.getDebt()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(contract.getPenaltyDebt()).isEqualByComparingTo(new BigDecimal("100.00"));
+        verify(contractRepository).save(same(contract));
     }
 
     private static Tenant tenant() {

@@ -47,7 +47,8 @@ class DebtCalculationServiceTest {
 
         debtCalculationService.chargeLatePaymentPenalties(LocalDate.of(2026, 6, 5));
 
-        assertThat(contract.getDebt()).isEqualByComparingTo(new BigDecimal("190.00"));
+        assertThat(contract.getDebt()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(contract.getPenaltyDebt()).isEqualByComparingTo(new BigDecimal("190.00"));
         assertThat(contract.getLastPenaltyDueDate()).isEqualTo(dueDate);
         verify(rentContractRepository).save(contract);
         verify(notificationService).createPaymentPenalty(
@@ -65,6 +66,7 @@ class DebtCalculationServiceTest {
         debtCalculationService.chargeLatePaymentPenalties(LocalDate.of(2026, 6, 5));
 
         assertThat(contract.getDebt()).isEqualByComparingTo(new BigDecimal("3800.00"));
+        assertThat(contract.getPenaltyDebt()).isEqualByComparingTo(BigDecimal.ZERO);
         verify(rentContractRepository, never()).save(any(RentContract.class));
         verify(notificationService, never()).createPaymentPenalty(any(), any(), any());
     }

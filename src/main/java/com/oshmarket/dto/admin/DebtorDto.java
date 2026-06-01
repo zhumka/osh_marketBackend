@@ -16,4 +16,6 @@ public class DebtorDto {
     private String location;
     private BigDecimal monthlyRent;
     private BigDecimal debt;
+    private BigDecimal penaltyDebt;
+    private BigDecimal totalDebt;
 }

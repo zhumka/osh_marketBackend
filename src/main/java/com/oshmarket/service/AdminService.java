@@ -8,11 +8,14 @@ import com.oshmarket.exception.ApiException;
 import com.oshmarket.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -28,6 +31,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class AdminService {
+
+    private static final String DEFAULT_CONTRACT_TEMPLATE_PATH = "contracts/dogovor_arenda_osh_bazar.pdf";
+    private static final String DEFAULT_CONTRACT_TEMPLATE_FILENAME = "dogovor_arenda_osh_bazar.pdf";
 
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
@@ -55,6 +61,7 @@ public class AdminService {
                 .freePlaces(placeRepository.countByOccupiedFalseAndDeletedFalse())
                 .debtors(contractRepository.countDebtors())
                 .totalDebt(contractRepository.sumTotalDebt())
+                .totalPenaltyDebt(contractRepository.sumTotalPenaltyDebt())
                 .recentTenants(recentTenants)
                 .build();
     }
@@ -102,14 +109,20 @@ public class AdminService {
                 .lastPaymentDate(lastPayment.map(p -> p.getPaymentDate()).orElse(null))
                 .paymentHistory(history);
 
-        contractOpt.ifPresent(c -> builder
-                .placeNumber(c.getPlace().getPlaceNumber())
-                .aisle(c.getPlace().getAisle())
-                .department(c.getPlace().getDepartment())
-                .monthlyRent(c.getPlace().getMonthlyRent())
-                .startDate(c.getStartDate())
-                .plannedEndDate(c.getPlannedEndDate())
-                .debt(c.getDebt()));
+        contractOpt.ifPresent(c -> {
+            BigDecimal debt = safeAmount(c.getDebt());
+            BigDecimal penaltyDebt = safeAmount(c.getPenaltyDebt());
+            builder
+                    .placeNumber(c.getPlace().getPlaceNumber())
+                    .aisle(c.getPlace().getAisle())
+                    .department(c.getPlace().getDepartment())
+                    .monthlyRent(c.getPlace().getMonthlyRent())
+                    .startDate(c.getStartDate())
+                    .plannedEndDate(c.getPlannedEndDate())
+                    .debt(debt)
+                    .penaltyDebt(penaltyDebt)
+                    .totalDebt(totalDebt(debt, penaltyDebt));
+        });
 
         return builder.build();
     }
@@ -290,7 +303,7 @@ public class AdminService {
         payment.setStatus(PaymentStatus.APPROVED);
         paymentRepository.save(payment);
 
-        contract.setDebt(contract.getDebt().subtract(req.getAmount()));
+        applyPaymentToContractBalance(contract, req.getAmount());
         contractRepository.save(contract);
 
         notificationService.createPaymentSuccess(tenant, req.getAmount(), paymentDate);
@@ -329,6 +342,22 @@ public class AdminService {
         return storageService.get(payment.getReceiptObjectKey(), payment.getReceiptContentType());
     }
 
+    public FileContent getDefaultContractTemplate() {
+        ClassPathResource resource = new ClassPathResource(DEFAULT_CONTRACT_TEMPLATE_PATH);
+        if (!resource.exists()) {
+            throw ApiException.notFound("Default contract template not found");
+        }
+
+        try {
+            return new FileContent(
+                    resource.getContentAsByteArray(),
+                    MediaType.APPLICATION_PDF_VALUE,
+                    DEFAULT_CONTRACT_TEMPLATE_FILENAME);
+        } catch (IOException e) {
+            throw ApiException.notFound("Default contract template not found");
+        }
+    }
+
     @Transactional
     public void approvePayment(Long paymentId, Long adminUserId) {
         Payment payment = paymentRepository.findById(paymentId)
@@ -343,7 +372,7 @@ public class AdminService {
         paymentRepository.save(payment);
 
         RentContract contract = payment.getContract();
-        contract.setDebt(contract.getDebt().subtract(payment.getAmount()));
+        applyPaymentToContractBalance(contract, payment.getAmount());
         contractRepository.save(contract);
 
         notificationService.createPaymentSuccess(contract.getTenant(), payment.getAmount(), payment.getPaymentDate());
@@ -517,29 +546,41 @@ public class AdminService {
     public List<DebtorDto> getDebtors() {
         return contractRepository.findAllActiveWithDebtOrderByDebtDesc()
                 .stream()
-                .map(c -> DebtorDto.builder()
-                        .tenantId(c.getTenant().getId())
-                        .inn(c.getTenant().getInn())
-                        .fullName(c.getTenant().getFullName())
-                        .placeNumber(c.getPlace().getPlaceNumber())
-                        .phone(c.getTenant().getPhone())
-                        .location(c.getPlace().getAisle() + ", " + c.getPlace().getDepartment())
-                        .monthlyRent(c.getPlace().getMonthlyRent())
-                        .debt(c.getDebt())
-                        .build())
+                .map(c -> {
+                    BigDecimal debt = safeAmount(c.getDebt());
+                    BigDecimal penaltyDebt = safeAmount(c.getPenaltyDebt());
+                    return DebtorDto.builder()
+                            .tenantId(c.getTenant().getId())
+                            .inn(c.getTenant().getInn())
+                            .fullName(c.getTenant().getFullName())
+                            .placeNumber(c.getPlace().getPlaceNumber())
+                            .phone(c.getTenant().getPhone())
+                            .location(c.getPlace().getAisle() + ", " + c.getPlace().getDepartment())
+                            .monthlyRent(c.getPlace().getMonthlyRent())
+                            .debt(debt)
+                            .penaltyDebt(penaltyDebt)
+                            .totalDebt(totalDebt(debt, penaltyDebt))
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 
     public AnalyticsDto getAnalytics() {
         List<DebtorDto> topDebtors = contractRepository.findAllActiveWithDebtOrderByDebtDesc()
                 .stream().limit(5)
-                .map(c -> DebtorDto.builder()
-                        .tenantId(c.getTenant().getId())
-                        .placeNumber(c.getPlace().getPlaceNumber())
-                        .inn(c.getTenant().getInn())
-                        .fullName(c.getTenant().getFullName())
-                        .debt(c.getDebt())
-                        .build())
+                .map(c -> {
+                    BigDecimal debt = safeAmount(c.getDebt());
+                    BigDecimal penaltyDebt = safeAmount(c.getPenaltyDebt());
+                    return DebtorDto.builder()
+                            .tenantId(c.getTenant().getId())
+                            .placeNumber(c.getPlace().getPlaceNumber())
+                            .inn(c.getTenant().getInn())
+                            .fullName(c.getTenant().getFullName())
+                            .debt(debt)
+                            .penaltyDebt(penaltyDebt)
+                            .totalDebt(totalDebt(debt, penaltyDebt))
+                            .build();
+                })
                 .collect(Collectors.toList());
 
         BigDecimal totalRevenue = placeRepository.findAllByOccupiedTrueAndDeletedFalseOrderByPlaceNumber()
@@ -553,6 +594,7 @@ public class AdminService {
                 .freePlaces(placeRepository.countByOccupiedFalseAndDeletedFalse())
                 .debtors(contractRepository.countDebtors())
                 .totalDebt(contractRepository.sumTotalDebt())
+                .totalPenaltyDebt(contractRepository.sumTotalPenaltyDebt())
                 .totalMonthlyRevenue(totalRevenue)
                 .topDebtors(topDebtors)
                 .build();
@@ -560,12 +602,14 @@ public class AdminService {
 
     private TenantListItemDto toListItem(Tenant tenant) {
         Optional<RentContract> contractOpt = contractRepository.findByTenantIdAndActiveTrue(tenant.getId());
-        BigDecimal debt = contractOpt.map(RentContract::getDebt).orElse(BigDecimal.ZERO);
+        BigDecimal debt = contractOpt.map(c -> safeAmount(c.getDebt())).orElse(BigDecimal.ZERO);
+        BigDecimal penaltyDebt = contractOpt.map(c -> safeAmount(c.getPenaltyDebt())).orElse(BigDecimal.ZERO);
+        BigDecimal totalDebt = totalDebt(debt, penaltyDebt);
         String placeNumber = contractOpt.map(c -> c.getPlace().getPlaceNumber()).orElse("-");
         String location = contractOpt.map(c -> c.getPlace().getAisle() + ", " + c.getPlace().getDepartment())
                 .orElse("-");
         BigDecimal monthlyRent = contractOpt.map(c -> c.getPlace().getMonthlyRent()).orElse(BigDecimal.ZERO);
-        String status = resolvePaymentStatus(contractOpt, debt);
+        String status = resolvePaymentStatus(contractOpt, totalDebt);
 
         return TenantListItemDto.builder()
                 .id(tenant.getId())
@@ -576,8 +620,44 @@ public class AdminService {
                 .location(location)
                 .monthlyRent(monthlyRent)
                 .debt(debt)
+                .penaltyDebt(penaltyDebt)
+                .totalDebt(totalDebt)
                 .status(status)
                 .build();
+    }
+
+    private void applyPaymentToContractBalance(RentContract contract, BigDecimal paymentAmount) {
+        BigDecimal remaining = safeAmount(paymentAmount);
+        BigDecimal debt = safeAmount(contract.getDebt());
+        BigDecimal penaltyDebt = safeAmount(contract.getPenaltyDebt());
+
+        if (debt.compareTo(BigDecimal.ZERO) > 0 && remaining.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal debtPayment = debt.min(remaining);
+            debt = debt.subtract(debtPayment);
+            remaining = remaining.subtract(debtPayment);
+        }
+
+        if (penaltyDebt.compareTo(BigDecimal.ZERO) > 0 && remaining.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal penaltyPayment = penaltyDebt.min(remaining);
+            penaltyDebt = penaltyDebt.subtract(penaltyPayment);
+            remaining = remaining.subtract(penaltyPayment);
+        }
+
+        if (remaining.compareTo(BigDecimal.ZERO) > 0) {
+            debt = debt.subtract(remaining);
+        }
+
+        contract.setDebt(debt);
+        contract.setPenaltyDebt(penaltyDebt);
+    }
+
+    private BigDecimal totalDebt(BigDecimal debt, BigDecimal penaltyDebt) {
+        return safeAmount(debt).max(BigDecimal.ZERO)
+                .add(safeAmount(penaltyDebt).max(BigDecimal.ZERO));
+    }
+
+    private BigDecimal safeAmount(BigDecimal amount) {
+        return amount != null ? amount : BigDecimal.ZERO;
     }
 
     private void validatePlannedEndDate(LocalDate startDate, LocalDate plannedEndDate) {

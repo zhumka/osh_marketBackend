@@ -43,6 +43,9 @@ public class RentContract {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal debt = BigDecimal.ZERO;
 
+    @Column(name = "penalty_debt", nullable = false, precision = 12, scale = 2)
+    private BigDecimal penaltyDebt = BigDecimal.ZERO;
+
     @Column(name = "last_penalty_due_date")
     private LocalDate lastPenaltyDueDate;
 

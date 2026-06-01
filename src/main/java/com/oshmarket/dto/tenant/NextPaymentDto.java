@@ -12,5 +12,6 @@ public class NextPaymentDto {
     private LocalDate dueDate;
     private BigDecimal monthlyRent;
     private BigDecimal debt;
+    private BigDecimal penaltyDebt;
     private BigDecimal totalDue;
 }
