@@ -159,6 +159,7 @@ public class AdminService {
         sendCredentials(req.getEmail(), req.getInn(), tempPassword);
         notificationService.createSystemNotification(tenant,
                 "Добро пожаловать! Ваше место " + place.getPlaceNumber() + " забронировано.");
+        notificationService.createPaymentReminder(tenant, place.getMonthlyRent(), req.getStartDate());
 
         log.info("Tenant created: INN={}, Place={}", req.getInn(), place.getPlaceNumber());
         return getTenantDetail(tenant.getId());
@@ -505,6 +506,7 @@ public class AdminService {
         String location = contractOpt.map(c -> c.getPlace().getAisle() + ", " + c.getPlace().getDepartment())
                 .orElse("-");
         BigDecimal monthlyRent = contractOpt.map(c -> c.getPlace().getMonthlyRent()).orElse(BigDecimal.ZERO);
+        String status = resolvePaymentStatus(contractOpt, debt);
 
         return TenantListItemDto.builder()
                 .id(tenant.getId())
@@ -515,8 +517,21 @@ public class AdminService {
                 .location(location)
                 .monthlyRent(monthlyRent)
                 .debt(debt)
-                .status(debt.compareTo(BigDecimal.ZERO) > 0 ? "Не оплачено" : "Оплачено")
+                .status(status)
                 .build();
+    }
+
+    private String resolvePaymentStatus(Optional<RentContract> contractOpt, BigDecimal debt) {
+        if (contractOpt.isEmpty()) {
+            return "Не оплачено";
+        }
+
+        boolean hasApprovedPayment = paymentRepository.existsByContractIdAndStatus(
+                contractOpt.get().getId(), PaymentStatus.APPROVED);
+
+        return debt.compareTo(BigDecimal.ZERO) <= 0 && hasApprovedPayment
+                ? "Оплачено"
+                : "Не оплачено";
     }
 
     private PlaceDto toPlaceDto(Place p) {

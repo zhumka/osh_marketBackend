@@ -1,0 +1,185 @@
+package com.oshmarket.service;
+
+import com.oshmarket.dto.admin.TenantListItemDto;
+import com.oshmarket.entity.PaymentStatus;
+import com.oshmarket.entity.Place;
+import com.oshmarket.entity.RentContract;
+import com.oshmarket.entity.Tenant;
+import com.oshmarket.entity.User;
+import com.oshmarket.dto.admin.CreateTenantRequest;
+import com.oshmarket.repository.PaymentMethodRepository;
+import com.oshmarket.repository.PaymentRepository;
+import com.oshmarket.repository.PlaceRepository;
+import com.oshmarket.repository.RentContractRepository;
+import com.oshmarket.repository.TenantRepository;
+import com.oshmarket.repository.UserRepository;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class AdminServiceTest {
+
+    @Mock
+    private TenantRepository tenantRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PlaceRepository placeRepository;
+    @Mock
+    private RentContractRepository contractRepository;
+    @Mock
+    private PaymentRepository paymentRepository;
+    @Mock
+    private PaymentMethodRepository paymentMethodRepository;
+    @Mock
+    private NotificationService notificationService;
+    @Mock
+    private DebtCalculationService debtCalculationService;
+    @Mock
+    private EmailService emailService;
+    @Mock
+    private StorageService storageService;
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @InjectMocks
+    private AdminService adminService;
+
+    @Test
+    void getAllTenantsMarksZeroDebtWithoutApprovedPaymentAsUnpaid() {
+        Tenant tenant = tenant();
+        RentContract contract = contract(tenant, BigDecimal.ZERO);
+
+        when(tenantRepository.findAllByDeletedFalseOrderByCreatedAtDesc()).thenReturn(List.of(tenant));
+        when(contractRepository.findByTenantIdAndActiveTrue(tenant.getId())).thenReturn(Optional.of(contract));
+        when(paymentRepository.existsByContractIdAndStatus(contract.getId(), PaymentStatus.APPROVED))
+                .thenReturn(false);
+
+        List<TenantListItemDto> tenants = adminService.getAllTenants();
+
+        assertThat(tenants).singleElement()
+                .extracting(TenantListItemDto::getStatus)
+                .isEqualTo("Не оплачено");
+    }
+
+    @Test
+    void getAllTenantsMarksZeroDebtWithApprovedPaymentAsPaid() {
+        Tenant tenant = tenant();
+        RentContract contract = contract(tenant, BigDecimal.ZERO);
+
+        when(tenantRepository.findAllByDeletedFalseOrderByCreatedAtDesc()).thenReturn(List.of(tenant));
+        when(contractRepository.findByTenantIdAndActiveTrue(tenant.getId())).thenReturn(Optional.of(contract));
+        when(paymentRepository.existsByContractIdAndStatus(contract.getId(), PaymentStatus.APPROVED))
+                .thenReturn(true);
+
+        List<TenantListItemDto> tenants = adminService.getAllTenants();
+
+        assertThat(tenants).singleElement()
+                .extracting(TenantListItemDto::getStatus)
+                .isEqualTo("Оплачено");
+    }
+
+    @Test
+    void createTenantWithPlaceSendsPaymentReminderForFirstRent() {
+        LocalDate startDate = LocalDate.now().plusDays(3);
+        CreateTenantRequest request = createTenantRequest(startDate);
+        Place place = place();
+        AtomicReference<Tenant> savedTenant = new AtomicReference<>();
+        AtomicReference<RentContract> savedContract = new AtomicReference<>();
+
+        when(tenantRepository.existsByInnAndDeletedFalse(request.getInn())).thenReturn(false);
+        when(placeRepository.findByIdAndDeletedFalse(request.getPlaceId())).thenReturn(Optional.of(place));
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tenantRepository.save(any(Tenant.class))).thenAnswer(invocation -> {
+            Tenant tenant = invocation.getArgument(0);
+            tenant.setId(1L);
+            savedTenant.set(tenant);
+            return tenant;
+        });
+        when(placeRepository.save(place)).thenReturn(place);
+        when(contractRepository.save(any(RentContract.class))).thenAnswer(invocation -> {
+            RentContract contract = invocation.getArgument(0);
+            contract.setId(3L);
+            savedContract.set(contract);
+            return contract;
+        });
+        when(tenantRepository.findByIdAndDeletedFalse(1L))
+                .thenAnswer(invocation -> Optional.of(savedTenant.get()));
+        when(contractRepository.findByTenantIdAndActiveTrue(1L))
+                .thenAnswer(invocation -> Optional.of(savedContract.get()));
+        when(paymentRepository.findFirstByContractIdAndStatusOrderByPaymentDateDesc(3L, PaymentStatus.APPROVED))
+                .thenReturn(Optional.empty());
+        when(paymentRepository.findAllByTenantId(1L)).thenReturn(List.of());
+
+        adminService.createTenantWithPlace(request);
+
+        verify(notificationService).createSystemNotification(same(savedTenant.get()), anyString());
+        verify(notificationService).createPaymentReminder(
+                same(savedTenant.get()), eq(place.getMonthlyRent()), eq(startDate));
+    }
+
+    private static Tenant tenant() {
+        Tenant tenant = new Tenant();
+        tenant.setId(1L);
+        tenant.setInn("12345678901234");
+        tenant.setFullName("Тестовый Арендатор");
+        tenant.setPhone("+996700000000");
+        return tenant;
+    }
+
+    private static RentContract contract(Tenant tenant, BigDecimal debt) {
+        Place place = new Place();
+        place.setId(2L);
+        place.setPlaceNumber("A-1");
+        place.setAisle("Ряд A");
+        place.setDepartment("Продукты");
+        place.setMonthlyRent(new BigDecimal("3800"));
+
+        RentContract contract = new RentContract();
+        contract.setId(3L);
+        contract.setTenant(tenant);
+        contract.setPlace(place);
+        contract.setDebt(debt);
+        return contract;
+    }
+
+    private static CreateTenantRequest createTenantRequest(LocalDate startDate) {
+        CreateTenantRequest request = new CreateTenantRequest();
+        request.setFullName("Новый Арендатор");
+        request.setInn("98765432101234");
+        request.setPhone("+996700111222");
+        request.setPlaceId(2L);
+        request.setStartDate(startDate);
+        return request;
+    }
+
+    private static Place place() {
+        Place place = new Place();
+        place.setId(2L);
+        place.setPlaceNumber("A-1");
+        place.setAisle("Ряд A");
+        place.setDepartment("Продукты");
+        place.setMonthlyRent(new BigDecimal("3800"));
+        place.setOccupied(false);
+        return place;
+    }
+}
