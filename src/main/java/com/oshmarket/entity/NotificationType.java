@@ -5,5 +5,6 @@ public enum NotificationType {
     PAYMENT_SUCCESS,
     PAYMENT_PENDING,
     PAYMENT_REJECTED,
+    PAYMENT_PENALTY,
     SYSTEM
 }

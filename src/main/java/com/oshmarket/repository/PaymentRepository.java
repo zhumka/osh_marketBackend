@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,6 +20,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findFirstByContractIdAndStatusOrderByPaymentDateDesc(Long contractId, PaymentStatus status);
 
     boolean existsByContractIdAndStatus(Long contractId, PaymentStatus status);
+
+    boolean existsByContractIdAndStatusAndPaymentDateAfter(
+            Long contractId, PaymentStatus status, LocalDate paymentDate);
 
     @Query("SELECT p FROM Payment p WHERE p.contract.tenant.id = :tenantId ORDER BY p.paymentDate DESC")
     List<Payment> findAllByTenantId(@Param("tenantId") Long tenantId);

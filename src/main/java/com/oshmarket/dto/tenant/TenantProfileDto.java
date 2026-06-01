@@ -19,4 +19,5 @@ public class TenantProfileDto {
     private boolean isActive;
     private LocalDate lastPaymentDate;
     private LocalDate startDate;
+    private LocalDate plannedEndDate;
 }

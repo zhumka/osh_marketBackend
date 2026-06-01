@@ -63,6 +63,7 @@ public class TenantCabinetService {
                 .isActive(true)
                 .lastPaymentDate(lastPayment.map(Payment::getPaymentDate).orElse(null))
                 .startDate(contract.getStartDate())
+                .plannedEndDate(contract.getPlannedEndDate())
                 .build();
     }
 

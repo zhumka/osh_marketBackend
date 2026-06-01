@@ -25,6 +25,7 @@ public class TenantDetailDto {
     private String department;
     private BigDecimal monthlyRent;
     private LocalDate startDate;
+    private LocalDate plannedEndDate;
     private BigDecimal debt;
     private LocalDate lastPaymentDate;
     private boolean hasActiveContract;

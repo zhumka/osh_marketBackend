@@ -68,6 +68,13 @@ public class NotificationService {
     }
 
     @Transactional
+    public void createPaymentPenalty(Tenant tenant, BigDecimal amount, LocalDate dueDate) {
+        String message = String.format("За просрочку оплаты аренды до %s начислен штраф: %s сом.",
+                dueDate.format(DATE_FMT), formatAmount(amount));
+        create(tenant, NotificationType.PAYMENT_PENALTY, message);
+    }
+
+    @Transactional
     public void createPaymentReminder(Tenant tenant, BigDecimal amount, LocalDate dueDate) {
         String message = String.format("Напоминание: оплата аренды до %s. Сумма: %s сом.",
                 dueDate.format(DATE_FMT), formatAmount(amount));

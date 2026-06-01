@@ -34,11 +34,17 @@ public class RentContract {
     @Column(name = "end_date")
     private LocalDate endDate;
 
+    @Column(name = "planned_end_date")
+    private LocalDate plannedEndDate;
+
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal debt = BigDecimal.ZERO;
+
+    @Column(name = "last_penalty_due_date")
+    private LocalDate lastPenaltyDueDate;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

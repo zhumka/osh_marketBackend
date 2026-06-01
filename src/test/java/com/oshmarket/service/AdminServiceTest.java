@@ -3,6 +3,7 @@ package com.oshmarket.service;
 import com.oshmarket.dto.admin.AssignPlaceRequest;
 import com.oshmarket.dto.admin.CreateTenantRequest;
 import com.oshmarket.dto.admin.TenantListItemDto;
+import com.oshmarket.dto.admin.UpdateTenantRequest;
 import com.oshmarket.entity.PaymentStatus;
 import com.oshmarket.entity.Place;
 import com.oshmarket.entity.RentContract;
@@ -133,6 +134,7 @@ class AdminServiceTest {
 
         adminService.createTenantWithPlace(request);
 
+        assertThat(savedContract.get().getPlannedEndDate()).isEqualTo(request.getPlannedEndDate());
         verify(notificationService).createSystemNotification(same(savedTenant.get()), anyString());
         verify(notificationService).createPaymentReminder(
                 same(savedTenant.get()), eq(place.getMonthlyRent()), eq(startDate));
@@ -169,9 +171,35 @@ class AdminServiceTest {
         assertThat(savedContract.get().getTenant()).isSameAs(tenant);
         assertThat(savedContract.get().getPlace()).isSameAs(place);
         assertThat(savedContract.get().getStartDate()).isEqualTo(startDate);
+        assertThat(savedContract.get().getPlannedEndDate()).isEqualTo(request.getPlannedEndDate());
         verify(notificationService).createSystemNotification(same(tenant), anyString());
         verify(notificationService).createPaymentReminder(
                 same(tenant), eq(place.getMonthlyRent()), eq(startDate));
+    }
+
+    @Test
+    void updateTenantChangesInnOnTenantAndUser() {
+        Tenant tenant = tenant();
+        User user = new User();
+        user.setInn(tenant.getInn());
+        tenant.setUser(user);
+        UpdateTenantRequest request = new UpdateTenantRequest();
+        request.setInn("99999999999999");
+
+        when(tenantRepository.findByIdAndDeletedFalse(tenant.getId())).thenReturn(Optional.of(tenant));
+        when(tenantRepository.existsByInnAndDeletedFalse(request.getInn())).thenReturn(false);
+        when(userRepository.existsByInnAndDeletedFalse(request.getInn())).thenReturn(false);
+        when(contractRepository.findByTenantIdAndActiveTrue(tenant.getId())).thenReturn(Optional.empty());
+        when(paymentRepository.findFirstByContractIdAndStatusOrderByPaymentDateDesc(-1L, PaymentStatus.APPROVED))
+                .thenReturn(Optional.empty());
+        when(paymentRepository.findAllByTenantId(tenant.getId())).thenReturn(List.of());
+
+        adminService.updateTenant(tenant.getId(), request);
+
+        assertThat(tenant.getInn()).isEqualTo(request.getInn());
+        assertThat(user.getInn()).isEqualTo(request.getInn());
+        verify(userRepository).save(same(user));
+        verify(tenantRepository).save(same(tenant));
     }
 
     private static Tenant tenant() {
@@ -206,6 +234,7 @@ class AdminServiceTest {
         request.setPhone("+996700111222");
         request.setPlaceId(2L);
         request.setStartDate(startDate);
+        request.setPlannedEndDate(startDate.plusMonths(1));
         return request;
     }
 
@@ -213,6 +242,7 @@ class AdminServiceTest {
         AssignPlaceRequest request = new AssignPlaceRequest();
         request.setPlaceId(2L);
         request.setStartDate(startDate);
+        request.setPlannedEndDate(startDate.plusMonths(1));
         return request;
     }
 

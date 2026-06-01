@@ -27,4 +27,7 @@ public class CreateTenantRequest {
 
     @NotNull(message = "Дата начала аренды обязательна")
     private LocalDate startDate;
+
+    @NotNull(message = "Дата окончания аренды обязательна")
+    private LocalDate plannedEndDate;
 }

@@ -108,6 +108,7 @@ public class AdminService {
                 .department(c.getPlace().getDepartment())
                 .monthlyRent(c.getPlace().getMonthlyRent())
                 .startDate(c.getStartDate())
+                .plannedEndDate(c.getPlannedEndDate())
                 .debt(c.getDebt()));
 
         return builder.build();
@@ -115,6 +116,8 @@ public class AdminService {
 
     @Transactional
     public TenantDetailDto createTenantWithPlace(CreateTenantRequest req) {
+        validatePlannedEndDate(req.getStartDate(), req.getPlannedEndDate());
+
         if (tenantRepository.existsByInnAndDeletedFalse(req.getInn())) {
             throw ApiException.conflict("Пользователь с таким ИНН уже зарегистрирован");
         }
@@ -154,6 +157,7 @@ public class AdminService {
         contract.setTenant(tenant);
         contract.setPlace(place);
         contract.setStartDate(req.getStartDate());
+        contract.setPlannedEndDate(req.getPlannedEndDate());
         contractRepository.save(contract);
 
         sendCredentials(req.getEmail(), req.getInn(), tempPassword);
@@ -167,6 +171,8 @@ public class AdminService {
 
     @Transactional
     public TenantDetailDto assignPlaceToExistingTenant(Long tenantId, AssignPlaceRequest req) {
+        validatePlannedEndDate(req.getStartDate(), req.getPlannedEndDate());
+
         Tenant tenant = tenantRepository.findByIdAndDeletedFalse(tenantId)
                 .orElseThrow(() -> ApiException.notFound("Арендатор не найден"));
 
@@ -187,6 +193,7 @@ public class AdminService {
         contract.setTenant(tenant);
         contract.setPlace(place);
         contract.setStartDate(req.getStartDate());
+        contract.setPlannedEndDate(req.getPlannedEndDate());
         contractRepository.save(contract);
 
         notificationService.createSystemNotification(tenant,
@@ -202,6 +209,17 @@ public class AdminService {
         Tenant tenant = tenantRepository.findByIdAndDeletedFalse(tenantId)
                 .orElseThrow(() -> ApiException.notFound("Арендатор не найден"));
 
+        if (req.getInn() != null && !req.getInn().equals(tenant.getInn())) {
+            if (tenantRepository.existsByInnAndDeletedFalse(req.getInn())
+                    || userRepository.existsByInnAndDeletedFalse(req.getInn())) {
+                throw ApiException.conflict("Пользователь с таким ИНН уже зарегистрирован");
+            }
+            tenant.setInn(req.getInn());
+            User user = tenant.getUser();
+            user.setInn(req.getInn());
+            userRepository.save(user);
+        }
+
         if (req.getFullName() != null) tenant.setFullName(req.getFullName());
         if (req.getPhone() != null) tenant.setPhone(req.getPhone());
         if (req.getEmail() != null) tenant.setEmail(req.getEmail());
@@ -216,6 +234,15 @@ public class AdminService {
                     .ifPresent(c -> {
                         c.getPlace().setMonthlyRent(req.getMonthlyRent());
                         placeRepository.save(c.getPlace());
+                    });
+        }
+
+        if (req.getPlannedEndDate() != null) {
+            contractRepository.findByTenantIdAndActiveTrue(tenantId)
+                    .ifPresent(c -> {
+                        validatePlannedEndDate(c.getStartDate(), req.getPlannedEndDate());
+                        c.setPlannedEndDate(req.getPlannedEndDate());
+                        contractRepository.save(c);
                     });
         }
 
@@ -551,6 +578,12 @@ public class AdminService {
                 .debt(debt)
                 .status(status)
                 .build();
+    }
+
+    private void validatePlannedEndDate(LocalDate startDate, LocalDate plannedEndDate) {
+        if (plannedEndDate != null && plannedEndDate.isBefore(startDate)) {
+            throw ApiException.badRequest("Дата окончания аренды не может быть раньше даты начала");
+        }
     }
 
     private String resolvePaymentStatus(Optional<RentContract> contractOpt, BigDecimal debt) {
