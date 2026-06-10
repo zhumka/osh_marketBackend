@@ -71,6 +71,23 @@ class DebtCalculationServiceTest {
         verify(notificationService, never()).createPaymentPenalty(any(), any(), any());
     }
 
+    @Test
+    void chargeLatePaymentPenaltiesCatchesUpOverdueRentPeriods() {
+        RentContract contract = contract(LocalDate.of(2026, 4, 1), new BigDecimal("7600.00"));
+
+        when(rentContractRepository.findAllByActiveTrueOrderByCreatedAtDesc()).thenReturn(List.of(contract));
+
+        debtCalculationService.chargeLatePaymentPenalties(LocalDate.of(2026, 6, 5));
+
+        assertThat(contract.getDebt()).isEqualByComparingTo(new BigDecimal("7600.00"));
+        assertThat(contract.getPenaltyDebt()).isEqualByComparingTo(new BigDecimal("380.00"));
+        assertThat(contract.getLastPenaltyDueDate()).isEqualTo(LocalDate.of(2026, 6, 1));
+        verify(notificationService).createPaymentPenalty(
+                contract.getTenant(), new BigDecimal("190.00"), LocalDate.of(2026, 5, 1));
+        verify(notificationService).createPaymentPenalty(
+                contract.getTenant(), new BigDecimal("190.00"), LocalDate.of(2026, 6, 1));
+    }
+
     private static RentContract contract(LocalDate startDate, BigDecimal debt) {
         Tenant tenant = new Tenant();
         tenant.setId(1L);
