@@ -3,13 +3,16 @@ package com.oshmarket.service;
 import com.oshmarket.dto.admin.AssignPlaceRequest;
 import com.oshmarket.dto.admin.CreateTenantRequest;
 import com.oshmarket.dto.admin.RecordPaymentRequest;
+import com.oshmarket.dto.admin.TenantDetailDto;
 import com.oshmarket.dto.admin.TenantListItemDto;
 import com.oshmarket.dto.admin.UpdateTenantRequest;
+import com.oshmarket.entity.Payment;
 import com.oshmarket.entity.PaymentStatus;
 import com.oshmarket.entity.Place;
 import com.oshmarket.entity.RentContract;
 import com.oshmarket.entity.Tenant;
 import com.oshmarket.entity.User;
+import com.oshmarket.exception.ApiException;
 import com.oshmarket.repository.PaymentMethodRepository;
 import com.oshmarket.repository.PaymentRepository;
 import com.oshmarket.repository.PlaceRepository;
@@ -30,6 +33,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -123,6 +127,50 @@ class AdminServiceTest {
     }
 
     @Test
+    void getAllTenantsReturnsLastApprovedPaymentDate() {
+        Tenant tenant = tenant();
+        RentContract contract = contract(tenant, BigDecimal.ZERO);
+        Payment payment = approvedPayment(LocalDate.of(2026, 6, 14));
+
+        when(tenantRepository.findAllByDeletedFalseOrderByCreatedAtDesc()).thenReturn(List.of(tenant));
+        when(contractRepository.findByTenantIdAndActiveTrue(tenant.getId())).thenReturn(Optional.of(contract));
+        when(paymentRepository.findFirstByContractIdAndStatusOrderByPaymentDateDescIdDesc(
+                contract.getId(), PaymentStatus.APPROVED))
+                .thenReturn(Optional.of(payment));
+        when(paymentRepository.existsByContractIdAndStatus(contract.getId(), PaymentStatus.APPROVED))
+                .thenReturn(true);
+
+        List<TenantListItemDto> tenants = adminService.getAllTenants();
+
+        assertThat(tenants).singleElement()
+                .satisfies(dto -> {
+                    assertThat(dto.getLastPaymentDate()).isEqualTo(LocalDate.of(2026, 6, 14));
+                    assertThat(dto.getStatus()).isEqualTo("Оплачено");
+                });
+    }
+
+    @Test
+    void getTenantDetailReturnsStatusAndLastApprovedPaymentDate() {
+        Tenant tenant = tenant();
+        RentContract contract = contract(tenant, BigDecimal.ZERO);
+        Payment payment = approvedPayment(LocalDate.of(2026, 6, 14));
+
+        when(tenantRepository.findByIdAndDeletedFalse(tenant.getId())).thenReturn(Optional.of(tenant));
+        when(contractRepository.findByTenantIdAndActiveTrue(tenant.getId())).thenReturn(Optional.of(contract));
+        when(paymentRepository.findFirstByContractIdAndStatusOrderByPaymentDateDescIdDesc(
+                contract.getId(), PaymentStatus.APPROVED))
+                .thenReturn(Optional.of(payment));
+        when(paymentRepository.findAllByTenantId(tenant.getId())).thenReturn(List.of(payment));
+        when(paymentRepository.existsByContractIdAndStatus(contract.getId(), PaymentStatus.APPROVED))
+                .thenReturn(true);
+
+        TenantDetailDto detail = adminService.getTenantDetail(tenant.getId());
+
+        assertThat(detail.getLastPaymentDate()).isEqualTo(LocalDate.of(2026, 6, 14));
+        assertThat(detail.getStatus()).isEqualTo("Оплачено");
+    }
+
+    @Test
     void createTenantWithPlaceSendsPaymentReminderForFirstRent() {
         LocalDate startDate = LocalDate.now().plusDays(3);
         CreateTenantRequest request = createTenantRequest(startDate);
@@ -151,9 +199,11 @@ class AdminServiceTest {
                 .thenAnswer(invocation -> Optional.of(savedTenant.get()));
         when(contractRepository.findByTenantIdAndActiveTrue(1L))
                 .thenAnswer(invocation -> Optional.of(savedContract.get()));
-        when(paymentRepository.findFirstByContractIdAndStatusOrderByPaymentDateDesc(3L, PaymentStatus.APPROVED))
+        when(paymentRepository.findFirstByContractIdAndStatusOrderByPaymentDateDescIdDesc(3L, PaymentStatus.APPROVED))
                 .thenReturn(Optional.empty());
         when(paymentRepository.findAllByTenantId(1L)).thenReturn(List.of());
+        when(paymentRepository.existsByContractIdAndStatus(3L, PaymentStatus.APPROVED))
+                .thenReturn(false);
 
         adminService.createTenantWithPlace(request);
 
@@ -161,6 +211,16 @@ class AdminServiceTest {
         verify(notificationService).createSystemNotification(same(savedTenant.get()), anyString());
         verify(notificationService).createPaymentReminder(
                 same(savedTenant.get()), eq(place.getMonthlyRent()), eq(startDate));
+    }
+
+    @Test
+    void createTenantWithPlaceRejectsPlannedEndDateOnStartDate() {
+        LocalDate startDate = LocalDate.of(2026, 6, 14);
+        CreateTenantRequest request = createTenantRequest(startDate);
+        request.setPlannedEndDate(startDate);
+
+        assertThatThrownBy(() -> adminService.createTenantWithPlace(request))
+                .isInstanceOf(ApiException.class);
     }
 
     @Test
@@ -184,9 +244,11 @@ class AdminServiceTest {
             savedContract.set(contract);
             return contract;
         });
-        when(paymentRepository.findFirstByContractIdAndStatusOrderByPaymentDateDesc(3L, PaymentStatus.APPROVED))
+        when(paymentRepository.findFirstByContractIdAndStatusOrderByPaymentDateDescIdDesc(3L, PaymentStatus.APPROVED))
                 .thenReturn(Optional.empty());
         when(paymentRepository.findAllByTenantId(tenant.getId())).thenReturn(List.of());
+        when(paymentRepository.existsByContractIdAndStatus(3L, PaymentStatus.APPROVED))
+                .thenReturn(false);
 
         adminService.assignPlaceToExistingTenant(tenant.getId(), request);
 
@@ -198,6 +260,16 @@ class AdminServiceTest {
         verify(notificationService).createSystemNotification(same(tenant), anyString());
         verify(notificationService).createPaymentReminder(
                 same(tenant), eq(place.getMonthlyRent()), eq(startDate));
+    }
+
+    @Test
+    void assignPlaceToExistingTenantRejectsPlannedEndDateOnStartDate() {
+        LocalDate startDate = LocalDate.of(2026, 6, 14);
+        AssignPlaceRequest request = assignPlaceRequest(startDate);
+        request.setPlannedEndDate(startDate);
+
+        assertThatThrownBy(() -> adminService.assignPlaceToExistingTenant(tenant().getId(), request))
+                .isInstanceOf(ApiException.class);
     }
 
     @Test
@@ -213,8 +285,6 @@ class AdminServiceTest {
         when(tenantRepository.existsByInnAndDeletedFalse(request.getInn())).thenReturn(false);
         when(userRepository.existsByInnAndDeletedFalse(request.getInn())).thenReturn(false);
         when(contractRepository.findByTenantIdAndActiveTrue(tenant.getId())).thenReturn(Optional.empty());
-        when(paymentRepository.findFirstByContractIdAndStatusOrderByPaymentDateDesc(-1L, PaymentStatus.APPROVED))
-                .thenReturn(Optional.empty());
         when(paymentRepository.findAllByTenantId(tenant.getId())).thenReturn(List.of());
 
         adminService.updateTenant(tenant.getId(), request);
@@ -223,6 +293,20 @@ class AdminServiceTest {
         assertThat(user.getInn()).isEqualTo(request.getInn());
         verify(userRepository).save(same(user));
         verify(tenantRepository).save(same(tenant));
+    }
+
+    @Test
+    void updateTenantRejectsPlannedEndDateOnStartDate() {
+        Tenant tenant = tenant();
+        RentContract contract = contract(tenant, BigDecimal.ZERO);
+        UpdateTenantRequest request = new UpdateTenantRequest();
+        request.setPlannedEndDate(contract.getStartDate());
+
+        when(tenantRepository.findByIdAndDeletedFalse(tenant.getId())).thenReturn(Optional.of(tenant));
+        when(contractRepository.findByTenantIdAndActiveTrue(tenant.getId())).thenReturn(Optional.of(contract));
+
+        assertThatThrownBy(() -> adminService.updateTenant(tenant.getId(), request))
+                .isInstanceOf(ApiException.class);
     }
 
     @Test
@@ -265,8 +349,18 @@ class AdminServiceTest {
         contract.setId(3L);
         contract.setTenant(tenant);
         contract.setPlace(place);
+        contract.setStartDate(LocalDate.of(2026, 6, 1));
         contract.setDebt(debt);
         return contract;
+    }
+
+    private static Payment approvedPayment(LocalDate paymentDate) {
+        Payment payment = new Payment();
+        payment.setId(9L);
+        payment.setAmount(new BigDecimal("3800.00"));
+        payment.setPaymentDate(paymentDate);
+        payment.setStatus(PaymentStatus.APPROVED);
+        return payment;
     }
 
     private static CreateTenantRequest createTenantRequest(LocalDate startDate) {

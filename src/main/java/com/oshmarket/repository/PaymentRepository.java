@@ -17,7 +17,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findFirstByContractIdOrderByPaymentDateDesc(Long contractId);
 
     /** Последний подтверждённый платёж — для отображения «дата последней оплаты». */
-    Optional<Payment> findFirstByContractIdAndStatusOrderByPaymentDateDesc(Long contractId, PaymentStatus status);
+    Optional<Payment> findFirstByContractIdAndStatusOrderByPaymentDateDescIdDesc(Long contractId, PaymentStatus status);
 
     boolean existsByContractIdAndStatus(Long contractId, PaymentStatus status);
 

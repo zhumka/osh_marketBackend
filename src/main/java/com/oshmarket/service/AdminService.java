@@ -78,8 +78,11 @@ public class AdminService {
                 .orElseThrow(() -> ApiException.notFound("Арендатор не найден"));
 
         Optional<RentContract> contractOpt = contractRepository.findByTenantIdAndActiveTrue(tenantId);
-        Optional<Payment> lastPayment = paymentRepository.findFirstByContractIdAndStatusOrderByPaymentDateDesc(
-                contractOpt.map(RentContract::getId).orElse(-1L), PaymentStatus.APPROVED);
+        Optional<Payment> lastPayment = findLastApprovedPayment(contractOpt);
+
+        BigDecimal debt = BigDecimal.ZERO;
+        BigDecimal penaltyDebt = BigDecimal.ZERO;
+        BigDecimal totalDebt = BigDecimal.ZERO;
 
         List<PaymentHistoryItemDto> history = paymentRepository.findAllByTenantId(tenantId)
                 .stream()
@@ -106,12 +109,17 @@ public class AdminService {
                 .passportIssuedDate(tenant.getPassportIssuedDate())
                 .passportIssuedBy(tenant.getPassportIssuedBy())
                 .hasActiveContract(contractOpt.isPresent())
+                .debt(debt)
+                .penaltyDebt(penaltyDebt)
+                .totalDebt(totalDebt)
                 .lastPaymentDate(lastPayment.map(p -> p.getPaymentDate()).orElse(null))
                 .paymentHistory(history);
 
-        contractOpt.ifPresent(c -> {
-            BigDecimal debt = safeAmount(c.getDebt());
-            BigDecimal penaltyDebt = safeAmount(c.getPenaltyDebt());
+        if (contractOpt.isPresent()) {
+            RentContract c = contractOpt.get();
+            debt = safeAmount(c.getDebt());
+            penaltyDebt = safeAmount(c.getPenaltyDebt());
+            totalDebt = totalDebt(debt, penaltyDebt);
             builder
                     .placeNumber(c.getPlace().getPlaceNumber())
                     .aisle(c.getPlace().getAisle())
@@ -121,8 +129,10 @@ public class AdminService {
                     .plannedEndDate(c.getPlannedEndDate())
                     .debt(debt)
                     .penaltyDebt(penaltyDebt)
-                    .totalDebt(totalDebt(debt, penaltyDebt));
-        });
+                    .totalDebt(totalDebt);
+        }
+
+        builder.status(resolvePaymentStatus(contractOpt, totalDebt));
 
         return builder.build();
     }
@@ -609,6 +619,7 @@ public class AdminService {
         String location = contractOpt.map(c -> c.getPlace().getAisle() + ", " + c.getPlace().getDepartment())
                 .orElse("-");
         BigDecimal monthlyRent = contractOpt.map(c -> c.getPlace().getMonthlyRent()).orElse(BigDecimal.ZERO);
+        Optional<Payment> lastPayment = findLastApprovedPayment(contractOpt);
         String status = resolvePaymentStatus(contractOpt, totalDebt);
 
         return TenantListItemDto.builder()
@@ -622,6 +633,7 @@ public class AdminService {
                 .debt(debt)
                 .penaltyDebt(penaltyDebt)
                 .totalDebt(totalDebt)
+                .lastPaymentDate(lastPayment.map(Payment::getPaymentDate).orElse(null))
                 .status(status)
                 .build();
     }
@@ -661,9 +673,14 @@ public class AdminService {
     }
 
     private void validatePlannedEndDate(LocalDate startDate, LocalDate plannedEndDate) {
-        if (plannedEndDate != null && plannedEndDate.isBefore(startDate)) {
-            throw ApiException.badRequest("Дата окончания аренды не может быть раньше даты начала");
+        if (plannedEndDate != null && !plannedEndDate.isAfter(startDate)) {
+            throw ApiException.badRequest("Дата окончания аренды должна быть позже даты начала");
         }
+    }
+
+    private Optional<Payment> findLastApprovedPayment(Optional<RentContract> contractOpt) {
+        return contractOpt.flatMap(c -> paymentRepository
+                .findFirstByContractIdAndStatusOrderByPaymentDateDescIdDesc(c.getId(), PaymentStatus.APPROVED));
     }
 
     private String resolvePaymentStatus(Optional<RentContract> contractOpt, BigDecimal debt) {

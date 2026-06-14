@@ -50,7 +50,7 @@ public class TenantCabinetService {
 
         RentContract contract = contractOpt.get();
         Optional<Payment> lastPayment = paymentRepository
-                .findFirstByContractIdAndStatusOrderByPaymentDateDesc(contract.getId(), PaymentStatus.APPROVED);
+                .findFirstByContractIdAndStatusOrderByPaymentDateDescIdDesc(contract.getId(), PaymentStatus.APPROVED);
 
         return TenantProfileDto.builder()
                 .inn(tenant.getInn())

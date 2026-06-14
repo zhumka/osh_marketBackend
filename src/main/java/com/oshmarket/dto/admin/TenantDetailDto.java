@@ -29,6 +29,7 @@ public class TenantDetailDto {
     private BigDecimal debt;
     private BigDecimal penaltyDebt;
     private BigDecimal totalDebt;
+    private String status;
     private LocalDate lastPaymentDate;
     private boolean hasActiveContract;
     private List<PaymentHistoryItemDto> paymentHistory;
