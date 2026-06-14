@@ -40,9 +40,8 @@ resend:
 
 app:
   seed:
-    # Наполнение БД тестовыми данными при старте (идемпотентно).
-    # В проде выставить false (env: APP_SEED_ENABLED=false).
-    enabled: ${APP_SEED_ENABLED:true}
+    # Test data seeding is opt-in. Enable locally with APP_SEED_ENABLED=true.
+    enabled: ${APP_SEED_ENABLED:false}
   password-reset:
     code-expiration-minutes: 15
     token-expiration-minutes: 15

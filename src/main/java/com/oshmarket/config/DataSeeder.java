@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
  * Пароль всех тестовых арендаторов: Tenant@123456
  */
 @Component
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
 @RequiredArgsConstructor
 @Slf4j
 @Order(100)
@@ -41,15 +42,9 @@ public class DataSeeder implements ApplicationRunner {
     private final NotificationRepository notificationRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${app.seed.enabled:true}")
-    private boolean seedEnabled;
-
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (!seedEnabled) {
-            return;
-        }
         if (tenantRepository.existsByInnAndDeletedFalse(MARKER_INN)) {
             log.info("Тестовые данные уже присутствуют — сидинг пропущен.");
             return;
