@@ -56,7 +56,10 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(List.of(
                 "https://osh-bazar-system.website",
-                "https://www.osh-bazar-system.website"
+                "https://www.osh-bazar-system.website",
+                "https://206.81.16.108",
+                "http://206.81.16.108",
+                "http://206.81.16.108:8082"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
