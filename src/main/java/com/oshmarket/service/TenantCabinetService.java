@@ -44,6 +44,7 @@ public class TenantCabinetService {
             return TenantProfileDto.builder()
                     .inn(tenant.getInn())
                     .fullName(tenant.getFullName())
+                    .status("Не оплачено")
                     .isActive(false)
                     .build();
         }
@@ -51,6 +52,7 @@ public class TenantCabinetService {
         RentContract contract = contractOpt.get();
         Optional<Payment> lastPayment = paymentRepository
                 .findFirstByContractIdAndStatusOrderByPaymentDateDescIdDesc(contract.getId(), PaymentStatus.APPROVED);
+        BigDecimal totalDebt = totalDebt(contract);
 
         return TenantProfileDto.builder()
                 .inn(tenant.getInn())
@@ -61,7 +63,8 @@ public class TenantCabinetService {
                 .monthlyRent(contract.getPlace().getMonthlyRent())
                 .debt(safeAmount(contract.getDebt()))
                 .penaltyDebt(safeAmount(contract.getPenaltyDebt()))
-                .totalDebt(totalDebt(contract))
+                .totalDebt(totalDebt)
+                .status(resolvePaymentStatus(totalDebt, lastPayment.isPresent()))
                 .isActive(true)
                 .lastPaymentDate(lastPayment.map(Payment::getPaymentDate).orElse(null))
                 .startDate(contract.getStartDate())
@@ -208,6 +211,12 @@ public class TenantCabinetService {
     private BigDecimal totalDebt(RentContract contract) {
         return safeAmount(contract.getDebt()).max(BigDecimal.ZERO)
                 .add(safeAmount(contract.getPenaltyDebt()).max(BigDecimal.ZERO));
+    }
+
+    private String resolvePaymentStatus(BigDecimal totalDebt, boolean hasApprovedPayment) {
+        return totalDebt.compareTo(BigDecimal.ZERO) <= 0 && hasApprovedPayment
+                ? "Оплачено"
+                : "Не оплачено";
     }
 
     private BigDecimal safeAmount(BigDecimal amount) {

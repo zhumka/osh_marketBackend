@@ -18,6 +18,7 @@ public class TenantProfileDto {
     private BigDecimal debt;
     private BigDecimal penaltyDebt;
     private BigDecimal totalDebt;
+    private String status;
     private boolean isActive;
     private LocalDate lastPaymentDate;
     private LocalDate startDate;
